@@ -98,7 +98,7 @@ function toggleMonitoramento() {
 }
 
 async function verificarPautas(container, forcarAtualizacao = false) {
-    console.log('Verificando pautas...');
+    console.log('Verificando pautas e votos...');
     
     try {
         const idAssembleia = obterIdAssembleia();
@@ -116,7 +116,28 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         const pautasAtuais = data.data[0].pautas;
         
         // Verifica se houve mudanças ou se é uma atualização forçada
-        if (forcarAtualizacao || JSON.stringify(pautasAtuais) !== JSON.stringify(ultimasPautasConhecidas)) {
+        let precisaAtualizar = forcarAtualizacao || JSON.stringify(pautasAtuais) !== JSON.stringify(ultimasPautasConhecidas);
+
+        // Se as pautas são as mesmas, verifica os votos de cada uma
+        if (!precisaAtualizar && ultimasPautasConhecidas.length > 0) {
+            for (const pauta of pautasAtuais) {
+                const idPauta = pauta.id_pauta_pau;
+                const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
+                const responseVotos = await fetch(urlVotos, { credentials: 'include' });
+                const votosData = await responseVotos.json();
+                
+                const totalVotosAtual = votosData.data?.length || 0;
+                const totalVotosAnterior = obterTotalVotosAnterior(idPauta);
+                
+                if (totalVotosAtual !== totalVotosAnterior) {
+                    console.log(`Votos da pauta ${idPauta} mudaram: ${totalVotosAnterior} → ${totalVotosAtual}`);
+                    precisaAtualizar = true;
+                    break;
+                }
+            }
+        }
+
+        if (precisaAtualizar) {
             console.log('Atualizando relatórios...');
             ultimasPautasConhecidas = pautasAtuais;
             
@@ -128,14 +149,24 @@ async function verificarPautas(container, forcarAtualizacao = false) {
                 }
             });
             
-            // Processa cada pauta
+            // Processa cada pauta e armazena o total de votos
+            // Processa cada pauta e armazena o total de votos
             for (const pauta of pautasAtuais) {
                 const idPauta = pauta.id_pauta_pau;
                 const descPauta = pauta.st_titulo_pau;
+                
+                // Armazena o total de votos para comparação futura
+                const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
+                const responseVotos = await fetch(urlVotos, { credentials: 'include' });
+                const votosData = await responseVotos.json();
+                
+                armazenarTotalVotos(idPauta, votosData.data?.length || 0);
+                
+                // Chama corretamente com os parâmetros na ordem certa
                 await gerarRelatorio(idPauta, container, descPauta);
             }
             
-            // Adiciona timestamp da última atualização
+            // Adiciona timestamp
             const timestamp = document.createElement('div');
             timestamp.style.textAlign = 'right';
             timestamp.style.fontSize = '0.8em';
@@ -143,11 +174,31 @@ async function verificarPautas(container, forcarAtualizacao = false) {
             timestamp.textContent = `Última atualização: ${new Date().toLocaleTimeString()}`;
             container.appendChild(timestamp);
         } else {
-            console.log('Nenhuma alteração nas pautas detectada.');
+            console.log('Nenhuma alteração nas pautas ou votos detectada.');
         }
+
+        
     } catch (error) {
         console.error('Erro ao verificar pautas:', error);
     }
+}
+
+
+// Funções auxiliares
+const cacheVotos = {};
+
+function armazenarTotalVotos(idPauta, total) {
+    cacheVotos[idPauta] = total;
+}
+
+function obterTotalVotosAnterior(idPauta) {
+    return cacheVotos[idPauta] || 0;
+}
+
+async function buscarResultadoVotacao(idPauta) {
+    const url = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/resultadovotacao?idPauta=${idPauta}`;
+    const response = await fetch(url, { credentials: 'include' });
+    return await response.json();
 }
 
 function obterIdAssembleia() {
