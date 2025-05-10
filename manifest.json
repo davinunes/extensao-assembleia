@@ -1,0 +1,14 @@
+{
+    "manifest_version": 3,
+    "name": "Superlógica - Analisador de Assembleias",
+    "version": "1.0",
+    "description": "Extrai dados de votação e pautas de assembleias no Superlógica.",
+    "permissions": ["activeTab", "scripting"],
+    "host_permissions": ["https://solucoesdf.superlogica.net/*"],
+    "content_scripts": [
+      {
+        "matches": ["https://solucoesdf.superlogica.net/*"],
+        "js": ["content.js"]
+      }
+    ]
+  }
