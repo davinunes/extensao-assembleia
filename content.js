@@ -131,7 +131,8 @@ async function verificarPautas(container, forcarAtualizacao = false) {
             // Processa cada pauta
             for (const pauta of pautasAtuais) {
                 const idPauta = pauta.id_pauta_pau;
-                await gerarRelatorio(idPauta, container);
+                const descPauta = pauta.st_titulo_pau;
+                await gerarRelatorio(idPauta, container, descPauta);
             }
             
             // Adiciona timestamp da última atualização
@@ -158,7 +159,7 @@ function obterIdAssembleia() {
 }
 
 // Função para gerar relatório de uma pauta
-async function gerarRelatorio(idPauta, container) {
+async function gerarRelatorio(idPauta, container, descPauta) {
     try {
         // A. Busca votos individuais
         const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
@@ -172,7 +173,7 @@ async function gerarRelatorio(idPauta, container) {
         const votosPorTorre = calcularVotosPorTorre(votosData);
 
         // D. Exibe os dados no container
-        exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container);
+        exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta);
     } catch (error) {
         console.error(`Erro ao processar pauta ${idPauta}:`, error);
     }
@@ -192,7 +193,7 @@ function calcularVotosPorTorre(votosData) {
 
 
 // Função para injetar o painel na página
-function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container) {
+function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta) {
     const painel = document.createElement('div');
     painel.className = 'painel-relatorio';
     painel.style.background = 'white';
@@ -200,6 +201,7 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     painel.style.borderRadius = '8px';
     painel.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
     painel.style.marginBottom = '10px';
+    painel.style.maxWidth = '600px';
 
     // Cálculos
     const totalVotos = votosData.data?.length || 0;
@@ -221,6 +223,19 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
 
     painel.innerHTML = `
         <h3 style="margin-top: 0; color: #2c3e50;">Relatório da Pauta #${idPauta}</h3>
+        <h4 style="margin: 10px 0;
+                  font-size: 1em;
+                  color: #555;
+                  max-width: 100%;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  display: -webkit-box;
+                  -webkit-line-clamp: 3; /* Limite de 3 linhas */
+                  -webkit-box-orient: vertical;
+                  word-break: break-word;
+                  line-height: 1.4;">
+            ${descPauta}
+        </h4>
         
         <div style="margin: 15px 0; padding: 12px; background: ${quorumAtingido ? '#e8f5e9' : '#ffebee'}; border-radius: 6px; border-left: 4px solid ${quorumAtingido ? '#4caf50' : '#f44336'};">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
