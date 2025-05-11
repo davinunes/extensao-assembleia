@@ -165,7 +165,7 @@ function criarContainer() {
     panelsContainer.style.padding = '15px';
     panelsContainer.style.borderRadius = '0 0 8px 8px';
     panelsContainer.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-    panelsContainer.style.width = '1220px'; // 600 + 600 + 20 (gap)
+    panelsContainer.style.width = 'fit-content'; // 600 + 600 + 20 (gap)
     panelsContainer.style.maxWidth = '100%'; // Para responsividade
     container.appendChild(panelsContainer);
 
@@ -174,6 +174,7 @@ function criarContainer() {
     chatContainer.id = 'chat-container';
     chatContainer.style.width = '600px';
     chatContainer.style.maxWidth = '100%';
+    chatContainer.style.flexShrink = '1';
     chatContainer.style.maxHeight = '70vh';
     chatContainer.style.overflowY = 'auto';
     chatContainer.style.padding = '10px';
@@ -187,6 +188,7 @@ function criarContainer() {
     reportsContainer.style.width = '600px';
     reportsContainer.style.maxWidth = '100%';
     reportsContainer.style.maxHeight = '70vh';
+    reportsContainer.style.flexShrink = '1';
     reportsContainer.style.overflowY = 'auto';
     reportsContainer.style.padding = '10px';
     reportsContainer.style.background = '#f9f9f9';
@@ -534,7 +536,7 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
             ${descPauta}
         </h4>
         
-        <div style="margin: 15px 0; padding: 12px; background: ${quorumAtingido ? '#e8f5e9' : '#ffebee'}; border-radius: 6px; border-left: 4px solid ${quorumAtingido ? '#4caf50' : '#f44336'};">
+        <div class="quorum" style="margin: 15px 0; padding: 12px; background: ${quorumAtingido ? '#e8f5e9' : '#ffebee'}; border-radius: 6px; border-left: 4px solid ${quorumAtingido ? '#4caf50' : '#f44336'};">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <strong>Quórum de Votação</strong>
                 <span style="font-weight: bold; color: ${quorumAtingido ? '#4caf50' : '#f44336'};">
