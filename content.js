@@ -623,6 +623,7 @@ async function verificarChats(pautas) {
     }
 }
 
+
 // Função para exibir novas mensagens
 function exibirNovasMensagens(mensagens, idPauta) {
     const chatContainer = document.getElementById('chat-container');
@@ -631,38 +632,76 @@ function exibirNovasMensagens(mensagens, idPauta) {
         return;
     }
 
-    // Remove a verificação do chatBody pois agora usamos chatContainer diretamente
-    
-    mensagens.forEach(msg => {
-        const messageElement = document.createElement('div');
-        messageElement.style.marginBottom = '10px';
-        messageElement.style.padding = '8px 12px';
-        messageElement.style.borderRadius = '18px';
-        messageElement.style.background = '#ffffff';
-        messageElement.style.boxShadow = '0 1px 1px rgba(0,0,0,0.1)';
-        
-        const dataHora = formatarDataHora(msg.dt_resposta_pau);
-        const remetente = `${msg.st_nome_con} (${msg.st_bloco_uni1}${msg.st_unidade_uni1})`;
-        
-        messageElement.innerHTML = `
-            <div style="font-size: 0.8em; color: #666; margin-bottom: 4px; display: flex; justify-content: space-between;">
-                <span>${remetente}</span>
-                <span>${dataHora}</span>
-            </div>
-            <div style="font-size: 0.95em; line-height: 1.4;">
-                ${msg.st_resposta_pau}
-            </div>
-        `;
-        
-        chatContainer.appendChild(messageElement);
+    // Função auxiliar para parse e validação da data
+    const parseDateTime = (dateTimeStr) => {
+        try {
+            const [datePart, timePart] = dateTimeStr.split(' ');
+            const [day, month, year] = datePart.split('/');
+            const [hours, minutes, seconds] = timePart.split(':');
+            
+            return new Date(
+                parseInt(year),
+                parseInt(month) - 1,
+                parseInt(day),
+                parseInt(hours),
+                parseInt(minutes),
+                parseInt(seconds)
+            );
+        } catch (e) {
+            logError('Erro ao parsear data:', dateTimeStr, e);
+            return new Date(); // Retorna data atual como fallback
+        }
+    };
+
+    // 1. Converter e ordenar mensagens por timestamp
+    const mensagensOrdenadas = mensagens
+        .filter(msg => msg.dt_resposta_pau) // Filtra mensagens com data válida
+        .map(msg => {
+            return {
+                ...msg,
+                timestamp: parseDateTime(msg.dt_resposta_pau).getTime()
+            };
+        })
+        .sort((a, b) => a.timestamp - b.timestamp);
+
+    // 2. Limpar e adicionar mensagens ordenadas
+    chatContainer.innerHTML = '';
+
+    mensagensOrdenadas.forEach(msg => {
+        try {
+            const messageElement = document.createElement('div');
+            messageElement.style.marginBottom = '10px';
+            messageElement.style.padding = '8px 12px';
+            messageElement.style.borderRadius = '18px';
+            messageElement.style.background = '#ffffff';
+            messageElement.style.boxShadow = '0 1px 1px rgba(0,0,0,0.1)';
+            
+            // Formatação da data/hora no padrão brasileiro
+            const [data, hora] = msg.dt_resposta_pau.split(' ');
+            const [mes, dia] = data.split('/');
+            const [horas, minutos] = hora.split(':');
+            const dataHora = `${dia}/${mes} ${horas}:${minutos}`;
+            
+            // Remetente formatado (Bloco + Unidade)
+            const bloco = msg.st_bloco_uni1 || msg.st_bloco_uni || '';
+            const unidade = msg.st_unidade_uni1 || msg.st_unidade_uni || '';
+            const remetente = `${msg.st_nome_con || 'Anônimo'} (${bloco}${unidade})`;
+            
+            messageElement.innerHTML = `
+                <div style="font-size: 0.8em; color: #666; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                    <span>${remetente}</span>
+                    <span>${dataHora}</span>
+                </div>
+                <div style="font-size: 0.95em; line-height: 1.4;">
+                    ${msg.st_resposta_pau || ''}
+                </div>
+            `;
+            
+            chatContainer.appendChild(messageElement);
+        } catch (e) {
+            logError('Erro ao exibir mensagem:', msg, e);
+        }
     });
     
     chatContainer.scrollTop = chatContainer.scrollHeight;
-}
-
-// Função auxiliar para formatar data/hora
-function formatarDataHora(dataString) {
-    const [data, hora] = dataString.split(' ');
-    const [dia, mes, ano] = data.split('/');
-    return `${dia}/${mes} ${hora}`;
 }
