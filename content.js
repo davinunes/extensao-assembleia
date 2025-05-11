@@ -379,7 +379,7 @@ async function verificarPautas(container, forcarAtualizacao = false) {
             ultimasPautasConhecidas = pautasAtuais;
             
             // Limpa apenas os relatórios antigos (não o container principal)
-            const reportsCol = document.getElementById('reports-col');
+            const reportsCol = document.getElementById('reports-container');
             if (reportsCol) {
                 reportsCol.innerHTML = ''; // Limpa apenas os relatórios
             }
