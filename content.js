@@ -118,6 +118,7 @@ function criarContainer() {
     container.style.bottom = '20px';
     container.style.right = '20px';
     container.style.zIndex = '10000';
+    container.style.maxHeight = '80vh';
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.background = 'transparent';
@@ -132,7 +133,7 @@ function criarContainer() {
     header.style.background = 'white';
     header.style.borderRadius = '8px 8px 0 0';
     header.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
-    header.style.width = '850px'; // Largura combinada dos dois painéis
+    header.style.width = '650px'; // Largura combinada dos dois painéis
     
     header.innerHTML = `
         <strong style="font-size: 1.1em;">Monitor de Assembleia</strong>
@@ -163,27 +164,28 @@ function criarContainer() {
     panelsContainer.style.padding = '15px';
     panelsContainer.style.borderRadius = '0 0 8px 8px';
     panelsContainer.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-    panelsContainer.style.width = '100%';
+    panelsContainer.style.width = '1220px'; // 600 + 600 + 20 (gap)
+    panelsContainer.style.maxWidth = '100%'; // Para responsividade
     container.appendChild(panelsContainer);
 
-    // Container do chat (agora dentro do painel principal)
+    // Container do chat - Largura reduzida
     const chatContainer = document.createElement('div');
     chatContainer.id = 'chat-container';
-    chatContainer.style.flex = '1';
-    chatContainer.style.minWidth = '350px';
-    chatContainer.style.maxHeight = '60vh';
+    chatContainer.style.width = '600px';
+    chatContainer.style.maxWidth = '100%';
+    chatContainer.style.maxHeight = '70vh';
     chatContainer.style.overflowY = 'auto';
     chatContainer.style.padding = '10px';
     chatContainer.style.background = '#f9f9f9';
     chatContainer.style.borderRadius = '6px';
     panelsContainer.appendChild(chatContainer);
 
-    // Container dos relatórios
+    // Container dos relatórios - Largura reduzida
     const reportsContainer = document.createElement('div');
     reportsContainer.id = 'reports-container';
-    reportsContainer.style.flex = '1';
-    reportsContainer.style.minWidth = '450px';
-    reportsContainer.style.maxHeight = '60vh';
+    reportsContainer.style.width = '600px';
+    reportsContainer.style.maxWidth = '100%';
+    reportsContainer.style.maxHeight = '70vh';
     reportsContainer.style.overflowY = 'auto';
     reportsContainer.style.padding = '10px';
     reportsContainer.style.background = '#f9f9f9';
