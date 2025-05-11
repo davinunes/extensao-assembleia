@@ -1,6 +1,7 @@
 // Variável global para controle
 let intervaloAtualizacao;
 let ultimasPautasConhecidas = [];
+let tipoAssembleia;
 // Estilos pré-definidos
 const estilosLog = {
     info: 'color: #3498db; font-weight: bold;',
@@ -338,10 +339,14 @@ async function verificarPautas(container, forcarAtualizacao = false) {
     logInfo('Verificando pautas e votos...');
     
     try {
-        const idAssembleia = obterIdAssembleia();
-        if (!idAssembleia) return;
+        const assembleiaInfo = obterIdAssembleia();
+        if (!assembleiaInfo) return;
 
-        const urlPautas = `https://solucoesdf.superlogica.net/areadocondomino/atual/assembleiasv2/index?assembleias=proximas&id=${idAssembleia}&comPautas=1`;
+        const { id: idAssembleia, passada } = assembleiaInfo;
+
+        const tipo = passada ? 'passadas' : 'proximas';
+        const urlPautas = `https://solucoesdf.superlogica.net/areadocondomino/atual/assembleiasv2/index?assembleias=${tipo}&id=${idAssembleia}&comPautas=1`;
+
         const response = await fetch(urlPautas, { credentials: 'include' });
         const data = await response.json();
 
@@ -351,11 +356,10 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         }
 
         const pautasAtuais = data.data[0].pautas;
-        
-        // Verifica se precisa atualizar
+        tipoAssembleia = data.data[0].tipo_assembleia;
+
         let precisaAtualizar = forcarAtualizacao || JSON.stringify(pautasAtuais) !== JSON.stringify(ultimasPautasConhecidas);
 
-        // Se as pautas são as mesmas, verifica os votos de cada uma
         if (!precisaAtualizar && ultimasPautasConhecidas.length > 0) {
             for (const pauta of pautasAtuais) {
                 const idPauta = pauta.id_pauta_pau;
@@ -378,15 +382,11 @@ async function verificarPautas(container, forcarAtualizacao = false) {
             logSuccess('Atualizando relatórios...');
             ultimasPautasConhecidas = pautasAtuais;
             
-            // Limpa apenas os relatórios antigos (não o container principal)
             const reportsCol = document.getElementById('reports-container');
-            if (reportsCol) {
-                reportsCol.innerHTML = ''; // Limpa apenas os relatórios
-            }
+            if (reportsCol) reportsCol.innerHTML = '';
             
             iniciarMonitoramentoChat(pautasAtuais);
 
-            // Processa cada pauta
             for (const pauta of pautasAtuais) {
                 const idPauta = pauta.id_pauta_pau;
                 const descPauta = pauta.st_titulo_pau;
@@ -399,18 +399,13 @@ async function verificarPautas(container, forcarAtualizacao = false) {
                 
                 await gerarRelatorio(idPauta, container, descPauta);
             }
-            
-            // Adiciona timestamp
+
             const timestamp = document.createElement('div');
             timestamp.style.textAlign = 'right';
             timestamp.style.fontSize = '0.8em';
             timestamp.style.color = '#7f8c8d';
             timestamp.textContent = `Última atualização: ${new Date().toLocaleTimeString()}`;
-            
-            
-            if (reportsCol) {
-                reportsCol.appendChild(timestamp);
-            }
+            if (reportsCol) reportsCol.appendChild(timestamp);
         } else {
             logInfo('Nenhuma alteração nas pautas ou votos detectada.');
         }
@@ -418,6 +413,7 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         logError('Erro ao verificar pautas:', error);
     }
 }
+
 
 function armazenarTotalVotos(idPauta, total) {
     cacheVotos[idPauta] = total;
@@ -435,11 +431,25 @@ async function buscarResultadoVotacao(idPauta) {
 
 function obterIdAssembleia() {
     const linkFilho = document.querySelector('#link-meeting a[id_assembleia]');
+    const urlAtual = window.location.href;
+
     if (linkFilho) {
-        return linkFilho.getAttribute('id_assembleia');
+        const id = linkFilho.getAttribute('id_assembleia');
+        logDebug("Assembleia encontrada via elemento: ", id);
+        return { id, passada: false };
     }
+
+    const match = urlAtual.match(/\/id\/(\d+)/);
+    const isPassada = urlAtual.includes('assembleias=passadas');
+
+    if (match && match[1]) {
+        logDebug("Assembleia encontrada via URL: ", match[1]);
+        return { id: match[1], passada: isPassada };
+    }
+
     return null;
 }
+
 
 // Função para gerar relatório de uma pauta
 async function gerarRelatorio(idPauta, container, descPauta) {
