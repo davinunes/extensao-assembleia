@@ -1,6 +1,69 @@
 // Variável global para controle
 let intervaloAtualizacao;
 let ultimasPautasConhecidas = [];
+// Estilos pré-definidos
+const estilosLog = {
+    info: 'color: #3498db; font-weight: bold;',
+    success: 'color: #2ecc71; font-weight: bold;',
+    warning: 'color: #f39c12; font-weight: bold;',
+    error: 'color: #e74c3c; font-weight: bold;',
+    debug: 'color: #9b59b6;',
+    default: 'color: #333;'
+};
+
+// Funções auxiliares
+const cacheVotos = {};
+
+// Variáveis globais para controle do chat
+let cacheChats = {};
+let intervaloChat;
+const intervaloAtualizacaoChat = 10000; // 10 segundos
+
+// Container do chat
+let chatContainer;
+
+// Estilos para o chat
+const chatStyles = {
+    container: `
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 10px;
+        margin-top: 15px;
+        background: #f9f9f9;
+    `,
+    message: `
+        margin-bottom: 10px;
+        padding: 8px 12px;
+        border-radius: 18px;
+        max-width: 80%;
+        word-wrap: break-word;
+        position: relative;
+    `,
+    userMessage: `
+        background: #e3f2fd;
+        margin-left: auto;
+        border-bottom-right-radius: 0;
+    `,
+    otherMessage: `
+        background: #ffffff;
+        margin-right: auto;
+        border-bottom-left-radius: 0;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+    `,
+    messageHeader: `
+        font-size: 0.8em;
+        color: #666;
+        margin-bottom: 4px;
+        display: flex;
+        justify-content: space-between;
+    `,
+    messageContent: `
+        font-size: 0.95em;
+        line-height: 1.4;
+    `
+};
 
 
 // 1. Verifica se a página já está carregada
@@ -13,7 +76,7 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 
 
 async function iniciarExtensao() {
-    console.log('Extensão iniciada!');
+    logSuccess('Extensão iniciada!');
     
     // Cria o container principal
     const container = criarContainer();
@@ -22,55 +85,195 @@ async function iniciarExtensao() {
     iniciarMonitoramento(container);
 }
 
+// Funções de log colorido
+function logInfo(mensagem, dados = '') {
+    console.log(`%cℹ INFO: ${mensagem}`, estilosLog.info, dados);
+}
+
+function logSuccess(mensagem, dados = '') {
+    console.log(`%c✓ SUCESSO: ${mensagem}`, estilosLog.success, dados);
+}
+
+function logWarning(mensagem, dados = '') {
+    console.log(`%c⚠ ALERTA: ${mensagem}`, estilosLog.warning, dados);
+}
+
+function logError(mensagem, dados = '') {
+    console.log(`%c✗ ERRO: ${mensagem}`, estilosLog.error, dados);
+}
+
+function logDebug(mensagem, dados = '') {
+    console.log(`%c🐛 DEBUG: ${mensagem}`, estilosLog.debug, dados);
+}
+
 function criarContainer() {
-    let container = document.getElementById('extensao-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'extensao-container';
-        container.style.position = 'fixed';
-        container.style.bottom = '20px';
-        container.style.right = '20px';
-        container.style.zIndex = '9999';
-        container.style.maxHeight = '80vh';
-        container.style.overflowY = 'auto';
-        container.style.display = 'flex';
-        container.style.flexDirection = 'column';
-        container.style.gap = '15px';
-        container.style.background = 'white';
-        container.style.padding = '15px';
-        container.style.borderRadius = '8px';
-        container.style.boxShadow = '0 0 20px rgba(0,0,0,0.2)';
-        document.body.appendChild(container);
-        
-        // Adiciona botão de controle
-        const controle = document.createElement('div');
-        controle.style.display = 'flex';
-        controle.style.justifyContent = 'space-between';
-        controle.style.marginBottom = '10px';
-        controle.style.alignItems = 'center';
-        
-        controle.innerHTML = `
-            <strong style="font-size: 1.1em;">Relatórios de Votação</strong>
-            <div>
-                <button id="atualizar-agora" style="padding: 5px 10px; margin-right: 5px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Atualizar Agora
-                </button>
-                <button id="pausar-monitoramento" style="padding: 5px 10px; background: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Pausar
-                </button>
-            </div>
-        `;
-        
-        container.prepend(controle);
-        
-        // Adiciona listeners aos botões
-        document.getElementById('atualizar-agora').addEventListener('click', () => {
-            verificarPautas(container, true);
-        });
-        
-        document.getElementById('pausar-monitoramento').addEventListener('click', toggleMonitoramento);
-    }
+    // Remove containers existentes para evitar duplicação
+    const existingContainers = document.querySelectorAll('#extensao-container, #chat-container-standalone');
+    existingContainers.forEach(el => el.remove());
+
+    // Cria o container principal para relatórios
+    const container = document.createElement('div');
+    container.id = 'extensao-container';
+    container.style.position = 'fixed';
+    container.style.bottom = '20px';
+    container.style.right = '20px';
+    container.style.zIndex = '10000'; // Aumentado para ficar na frente
+    container.style.maxHeight = '80vh';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.background = 'transparent';
+    document.body.appendChild(container);
+
+    // Cabeçalho com controles
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.padding = '10px';
+    header.style.background = 'white';
+    header.style.borderRadius = '8px 8px 0 0';
+    header.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+    
+    header.innerHTML = `
+        <strong style="font-size: 1.1em;">Monitor de Assembleia</strong>
+        <div>
+            <button id="atualizar-agora" style="padding: 5px 10px; margin-right: 5px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Atualizar
+            </button>
+            <button id="pausar-monitoramento" style="padding: 5px 10px; background: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Pausar
+            </button>
+            <button id="minimizar-relatorios" style="padding: 5px 10px; margin-left: 5px; background: #7f8c8d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Minimizar
+            </button>
+        </div>
+    `;
+    
+    container.appendChild(header);
+    
+    // Container para os relatórios
+    const reportsContainer = document.createElement('div');
+    reportsContainer.id = 'reports-container';
+    reportsContainer.style.flex = '1';
+    reportsContainer.style.width = '500px';
+    reportsContainer.style.maxHeight = 'calc(80vh - 50px)';
+    reportsContainer.style.overflowY = 'auto';
+    reportsContainer.style.background = 'white';
+    reportsContainer.style.padding = '15px';
+    reportsContainer.style.borderRadius = '0 0 8px 8px';
+    reportsContainer.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+    container.appendChild(reportsContainer);
+    
+    // Adiciona listeners
+    document.getElementById('atualizar-agora').addEventListener('click', () => verificarPautas(container, true));
+    document.getElementById('pausar-monitoramento').addEventListener('click', toggleMonitoramento);
+    document.getElementById('minimizar-relatorios').addEventListener('click', () => toggleMinimizar('reports-container', 'minimizar-relatorios'));
+
+    // Cria o container do chat
+    criarChatContainer();
+    
     return container;
+}
+
+function criarChatContainer() {
+    const chatContainer = document.createElement('div');
+    chatContainer.id = 'chat-container-standalone';
+    chatContainer.style.position = 'fixed';
+    chatContainer.style.bottom = '20px';
+    chatContainer.style.right = '540px'; // Posicionado à esquerda dos relatórios
+    chatContainer.style.zIndex = '9999'; // Um nível abaixo dos relatórios
+    chatContainer.style.display = 'flex';
+    chatContainer.style.flexDirection = 'column';
+    chatContainer.style.maxHeight = '80vh';
+    chatContainer.style.width = '350px';
+    document.body.appendChild(chatContainer);
+    
+    // Cabeçalho do chat
+    const chatHeader = document.createElement('div');
+    chatHeader.style.display = 'flex';
+    chatHeader.style.justifyContent = 'space-between';
+    chatHeader.style.alignItems = 'center';
+    chatHeader.style.padding = '10px';
+    chatHeader.style.background = '#3f51b5';
+    chatHeader.style.color = 'white';
+    chatHeader.style.borderRadius = '8px 8px 0 0';
+    chatHeader.style.cursor = 'move';
+    chatHeader.innerHTML = `
+        <strong style="font-size: 1.1em;">Chat da Assembleia</strong>
+        <button id="minimizar-chat" style="padding: 2px 8px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer;">
+            Minimizar
+        </button>
+    `;
+    chatContainer.appendChild(chatHeader);
+    
+    // Corpo do chat
+    const chatBody = document.createElement('div');
+    chatBody.id = 'chat-container-body';
+    chatBody.style.flex = '1';
+    chatBody.style.maxHeight = 'calc(80vh - 50px)';
+    chatBody.style.overflowY = 'auto';
+    chatBody.style.background = 'white';
+    chatBody.style.padding = '10px';
+    chatBody.style.borderRadius = '0 0 8px 8px';
+    chatBody.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+    chatContainer.appendChild(chatBody);
+    
+    // Adiciona listeners
+    document.getElementById('minimizar-chat').addEventListener('click', () => toggleMinimizar('chat-container-body', 'minimizar-chat'));
+    makeDraggable(chatHeader, chatContainer);
+}
+
+// Função para alternar entre minimizar/maximizar
+function toggleMinimizar(containerId, buttonId) {
+    const container = document.getElementById(containerId);
+    const button = document.getElementById(buttonId);
+    
+    if (container.style.display === 'none') {
+        container.style.display = containerId === 'chat-container' ? 'block' : 'flex';
+        button.textContent = 'Minimizar';
+    } else {
+        container.style.display = 'none';
+        button.textContent = 'Maximizar';
+    }
+}
+
+// Função para tornar um elemento arrastável
+function makeDraggable(header, container) {
+    let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    
+    header.onmousedown = dragMouseDown;
+    
+    function dragMouseDown(e) {
+        e = e || window.event;
+        e.preventDefault();
+        // get the mouse cursor position at startup:
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        document.onmouseup = closeDragElement;
+        // call a function whenever the cursor moves:
+        document.onmousemove = elementDrag;
+    }
+    
+    function elementDrag(e) {
+        e = e || window.event;
+        e.preventDefault();
+        // calculate the new cursor position:
+        pos1 = pos3 - e.clientX;
+        pos2 = pos4 - e.clientY;
+        pos3 = e.clientX;
+        pos4 = e.clientY;
+        // set the element's new position:
+        container.style.top = (container.offsetTop - pos2) + "px";
+        container.style.left = (container.offsetLeft - pos1) + "px";
+        container.style.right = 'auto';
+        container.style.bottom = 'auto';
+    }
+    
+    function closeDragElement() {
+        // stop moving when mouse button is released:
+        document.onmouseup = null;
+        document.onmousemove = null;
+    }
 }
 
 function iniciarMonitoramento(container) {
@@ -97,8 +300,9 @@ function toggleMonitoramento() {
     }
 }
 
+// Modifique a função verificarPautas()
 async function verificarPautas(container, forcarAtualizacao = false) {
-    console.log('Verificando pautas e votos...');
+    logInfo('Verificando pautas e votos...');
     
     try {
         const idAssembleia = obterIdAssembleia();
@@ -109,13 +313,13 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         const data = await response.json();
 
         if (!data.data?.[0]?.pautas) {
-            console.log('Nenhuma pauta encontrada.');
+            logWarning('Nenhuma pauta encontrada.');
             return;
         }
 
         const pautasAtuais = data.data[0].pautas;
         
-        // Verifica se houve mudanças ou se é uma atualização forçada
+        // Verifica se precisa atualizar
         let precisaAtualizar = forcarAtualizacao || JSON.stringify(pautasAtuais) !== JSON.stringify(ultimasPautasConhecidas);
 
         // Se as pautas são as mesmas, verifica os votos de cada uma
@@ -130,7 +334,7 @@ async function verificarPautas(container, forcarAtualizacao = false) {
                 const totalVotosAnterior = obterTotalVotosAnterior(idPauta);
                 
                 if (totalVotosAtual !== totalVotosAnterior) {
-                    console.log(`Votos da pauta ${idPauta} mudaram: ${totalVotosAnterior} → ${totalVotosAtual}`);
+                    logDebug(`Votos da pauta ${idPauta} mudaram: ${totalVotosAnterior} → ${totalVotosAtual}`);
                     precisaAtualizar = true;
                     break;
                 }
@@ -138,31 +342,28 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         }
 
         if (precisaAtualizar) {
-            console.log('Atualizando relatórios...');
+            logSuccess('Atualizando relatórios...');
             ultimasPautasConhecidas = pautasAtuais;
             
-            // Limpa relatórios antigos (exceto o cabeçalho)
-            const container = document.getElementById('extensao-container');
-            Array.from(container.children).forEach(child => {
-                if (!child.querySelector('#atualizar-agora')) {
-                    child.remove();
-                }
-            });
+            // Limpa apenas os relatórios antigos (não o container principal)
+            const reportsCol = document.getElementById('reports-col');
+            if (reportsCol) {
+                reportsCol.innerHTML = ''; // Limpa apenas os relatórios
+            }
             
-            // Processa cada pauta e armazena o total de votos
-            // Processa cada pauta e armazena o total de votos
+            iniciarMonitoramentoChat(pautasAtuais);
+
+            // Processa cada pauta
             for (const pauta of pautasAtuais) {
                 const idPauta = pauta.id_pauta_pau;
                 const descPauta = pauta.st_titulo_pau;
                 
-                // Armazena o total de votos para comparação futura
                 const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
                 const responseVotos = await fetch(urlVotos, { credentials: 'include' });
                 const votosData = await responseVotos.json();
                 
                 armazenarTotalVotos(idPauta, votosData.data?.length || 0);
                 
-                // Chama corretamente com os parâmetros na ordem certa
                 await gerarRelatorio(idPauta, container, descPauta);
             }
             
@@ -172,20 +373,18 @@ async function verificarPautas(container, forcarAtualizacao = false) {
             timestamp.style.fontSize = '0.8em';
             timestamp.style.color = '#7f8c8d';
             timestamp.textContent = `Última atualização: ${new Date().toLocaleTimeString()}`;
-            container.appendChild(timestamp);
+            
+            
+            if (reportsCol) {
+                reportsCol.appendChild(timestamp);
+            }
         } else {
-            console.log('Nenhuma alteração nas pautas ou votos detectada.');
+            logInfo('Nenhuma alteração nas pautas ou votos detectada.');
         }
-
-        
     } catch (error) {
-        console.error('Erro ao verificar pautas:', error);
+        logError('Erro ao verificar pautas:', error);
     }
 }
-
-
-// Funções auxiliares
-const cacheVotos = {};
 
 function armazenarTotalVotos(idPauta, total) {
     cacheVotos[idPauta] = total;
@@ -242,17 +441,21 @@ function calcularVotosPorTorre(votosData) {
     return contagem;
 }
 
-
 // Função para injetar o painel na página
 function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta) {
+    const reportsContainer = document.getElementById('reports-container');
+    if (!reportsContainer) {
+        logError('Container de relatórios não encontrado!');
+        return;
+    }
+
     const painel = document.createElement('div');
     painel.className = 'painel-relatorio';
     painel.style.background = 'white';
     painel.style.padding = '15px';
-    painel.style.borderRadius = '8px';
-    painel.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-    painel.style.marginBottom = '10px';
-    painel.style.maxWidth = '600px';
+    painel.style.marginBottom = '15px';
+    painel.style.borderRadius = '6px';
+    painel.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
 
     // Cálculos
     const totalVotos = votosData.data?.length || 0;
@@ -341,5 +544,92 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
         </button>
     `;
 
-    container.appendChild(painel);
+    reportsContainer.appendChild(painel);
+    reportsContainer.scrollTop = reportsContainer.scrollHeight;
+}
+
+// Função para iniciar o monitoramento do chat
+function iniciarMonitoramentoChat(pautas) {
+    if (intervaloChat) {
+        clearInterval(intervaloChat);
+    }
+
+    // O container do chat já foi criado na função criarContainer()
+    
+    // Verificação imediata
+    verificarChats(pautas);
+    
+    // Configura o intervalo
+    intervaloChat = setInterval(() => verificarChats(pautas), intervaloAtualizacaoChat);
+}
+
+// Função para verificar atualizações nos chats
+async function verificarChats(pautas) {
+    try {
+        for (const pauta of pautas) {
+            const idPauta = pauta.id_pauta_pau;
+            const urlChat = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/listardiscussao?daPauta=${idPauta}`;
+            
+            const response = await fetch(urlChat, { credentials: 'include' });
+            const data = await response.json();
+            
+            if (data.data && Array.isArray(data.data)) {
+                const mensagensAtuais = data.data;
+                const ultimasMensagens = cacheChats[idPauta] || [];
+                
+                // Verifica se há novas mensagens
+                if (mensagensAtuais.length > ultimasMensagens.length) {
+                    const novasMensagens = mensagensAtuais.slice(ultimasMensagens.length);
+                    exibirNovasMensagens(novasMensagens, idPauta);
+                    
+                    // Atualiza o cache
+                    cacheChats[idPauta] = mensagensAtuais;
+                }
+            }
+        }
+    } catch (error) {
+        logError('Erro ao verificar chats:', error);
+    }
+}
+
+// Função para exibir novas mensagens
+function exibirNovasMensagens(mensagens, idPauta) {
+    const chatBody = document.getElementById('chat-container-body');
+    if (!chatBody) {
+        logError('Corpo do chat não encontrado!');
+        return;
+    }
+
+    mensagens.forEach(msg => {
+        const messageElement = document.createElement('div');
+        messageElement.style.marginBottom = '10px';
+        messageElement.style.padding = '8px 12px';
+        messageElement.style.borderRadius = '18px';
+        messageElement.style.background = '#ffffff';
+        messageElement.style.boxShadow = '0 1px 1px rgba(0,0,0,0.1)';
+        
+        const dataHora = formatarDataHora(msg.dt_resposta_pau);
+        const remetente = `${msg.st_nome_con} (${msg.st_bloco_uni1}${msg.st_unidade_uni1})`;
+        
+        messageElement.innerHTML = `
+            <div style="font-size: 0.8em; color: #666; margin-bottom: 4px; display: flex; justify-content: space-between;">
+                <span>${remetente}</span>
+                <span>${dataHora}</span>
+            </div>
+            <div style="font-size: 0.95em; line-height: 1.4;">
+                ${msg.st_resposta_pau}
+            </div>
+        `;
+        
+        chatBody.appendChild(messageElement);
+    });
+    
+    chatBody.scrollTop = chatBody.scrollHeight;
+}
+
+// Função auxiliar para formatar data/hora
+function formatarDataHora(dataString) {
+    const [data, hora] = dataString.split(' ');
+    const [dia, mes, ano] = data.split('/');
+    return `${dia}/${mes} ${hora}`;
 }
