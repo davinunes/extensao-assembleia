@@ -107,24 +107,23 @@ function logDebug(mensagem, dados = '') {
 }
 
 function criarContainer() {
-    // Remove containers existentes para evitar duplicação
+    // Remove containers existentes
     const existingContainers = document.querySelectorAll('#extensao-container, #chat-container-standalone');
     existingContainers.forEach(el => el.remove());
 
-    // Cria o container principal para relatórios
+    // Cria o container principal
     const container = document.createElement('div');
     container.id = 'extensao-container';
     container.style.position = 'fixed';
     container.style.bottom = '20px';
     container.style.right = '20px';
-    container.style.zIndex = '10000'; // Aumentado para ficar na frente
-    container.style.maxHeight = '80vh';
+    container.style.zIndex = '10000';
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.background = 'transparent';
     document.body.appendChild(container);
 
-    // Cabeçalho com controles
+    // Cabeçalho com todos os controles
     const header = document.createElement('div');
     header.style.display = 'flex';
     header.style.justifyContent = 'space-between';
@@ -133,6 +132,7 @@ function criarContainer() {
     header.style.background = 'white';
     header.style.borderRadius = '8px 8px 0 0';
     header.style.boxShadow = '0 2px 5px rgba(0,0,0,0.1)';
+    header.style.width = '850px'; // Largura combinada dos dois painéis
     
     header.innerHTML = `
         <strong style="font-size: 1.1em;">Monitor de Assembleia</strong>
@@ -140,87 +140,83 @@ function criarContainer() {
             <button id="atualizar-agora" style="padding: 5px 10px; margin-right: 5px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">
                 Atualizar
             </button>
-            <button id="pausar-monitoramento" style="padding: 5px 10px; background: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer;">
+            <button id="pausar-monitoramento" style="padding: 5px 10px; margin-right: 5px; background: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer;">
                 Pausar
             </button>
-            <button id="minimizar-relatorios" style="padding: 5px 10px; margin-left: 5px; background: #7f8c8d; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                Minimizar
+            <button id="minimizar-chat" style="padding: 5px 10px; margin-right: 5px; background: #7f8c8d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Ocultar Chat
+            </button>
+            <button id="minimizar-relatorios" style="padding: 5px 10px; background: #7f8c8d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Ocultar Relatórios
             </button>
         </div>
     `;
     
     container.appendChild(header);
     
-    // Container para os relatórios
+    // Container para os painéis (chat + relatórios)
+    const panelsContainer = document.createElement('div');
+    panelsContainer.id = 'panels-container';
+    panelsContainer.style.display = 'flex';
+    panelsContainer.style.gap = '10px';
+    panelsContainer.style.background = 'white';
+    panelsContainer.style.padding = '15px';
+    panelsContainer.style.borderRadius = '0 0 8px 8px';
+    panelsContainer.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
+    panelsContainer.style.width = '100%';
+    container.appendChild(panelsContainer);
+
+    // Container do chat (agora dentro do painel principal)
+    const chatContainer = document.createElement('div');
+    chatContainer.id = 'chat-container';
+    chatContainer.style.flex = '1';
+    chatContainer.style.minWidth = '350px';
+    chatContainer.style.maxHeight = '60vh';
+    chatContainer.style.overflowY = 'auto';
+    chatContainer.style.padding = '10px';
+    chatContainer.style.background = '#f9f9f9';
+    chatContainer.style.borderRadius = '6px';
+    panelsContainer.appendChild(chatContainer);
+
+    // Container dos relatórios
     const reportsContainer = document.createElement('div');
     reportsContainer.id = 'reports-container';
     reportsContainer.style.flex = '1';
-    reportsContainer.style.width = '500px';
-    reportsContainer.style.maxHeight = 'calc(80vh - 50px)';
+    reportsContainer.style.minWidth = '450px';
+    reportsContainer.style.maxHeight = '60vh';
     reportsContainer.style.overflowY = 'auto';
-    reportsContainer.style.background = 'white';
-    reportsContainer.style.padding = '15px';
-    reportsContainer.style.borderRadius = '0 0 8px 8px';
-    reportsContainer.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-    container.appendChild(reportsContainer);
-    
+    reportsContainer.style.padding = '10px';
+    reportsContainer.style.background = '#f9f9f9';
+    reportsContainer.style.borderRadius = '6px';
+    panelsContainer.appendChild(reportsContainer);
+
     // Adiciona listeners
     document.getElementById('atualizar-agora').addEventListener('click', () => verificarPautas(container, true));
     document.getElementById('pausar-monitoramento').addEventListener('click', toggleMonitoramento);
-    document.getElementById('minimizar-relatorios').addEventListener('click', () => toggleMinimizar('reports-container', 'minimizar-relatorios'));
-
-    // Cria o container do chat
-    criarChatContainer();
     
+    document.getElementById('minimizar-chat').addEventListener('click', function() {
+        const chat = document.getElementById('chat-container');
+        if (chat.style.display === 'none') {
+            chat.style.display = 'block';
+            this.textContent = 'Ocultar Chat';
+        } else {
+            chat.style.display = 'none';
+            this.textContent = 'Mostrar Chat';
+        }
+    });
+    
+    document.getElementById('minimizar-relatorios').addEventListener('click', function() {
+        const reports = document.getElementById('reports-container');
+        if (reports.style.display === 'none') {
+            reports.style.display = 'block';
+            this.textContent = 'Ocultar Relatórios';
+        } else {
+            reports.style.display = 'none';
+            this.textContent = 'Mostrar Relatórios';
+        }
+    });
+
     return container;
-}
-
-function criarChatContainer() {
-    const chatContainer = document.createElement('div');
-    chatContainer.id = 'chat-container-standalone';
-    chatContainer.style.position = 'fixed';
-    chatContainer.style.bottom = '20px';
-    chatContainer.style.right = '540px'; // Posicionado à esquerda dos relatórios
-    chatContainer.style.zIndex = '9999'; // Um nível abaixo dos relatórios
-    chatContainer.style.display = 'flex';
-    chatContainer.style.flexDirection = 'column';
-    chatContainer.style.maxHeight = '80vh';
-    chatContainer.style.width = '350px';
-    document.body.appendChild(chatContainer);
-    
-    // Cabeçalho do chat
-    const chatHeader = document.createElement('div');
-    chatHeader.style.display = 'flex';
-    chatHeader.style.justifyContent = 'space-between';
-    chatHeader.style.alignItems = 'center';
-    chatHeader.style.padding = '10px';
-    chatHeader.style.background = '#3f51b5';
-    chatHeader.style.color = 'white';
-    chatHeader.style.borderRadius = '8px 8px 0 0';
-    chatHeader.style.cursor = 'move';
-    chatHeader.innerHTML = `
-        <strong style="font-size: 1.1em;">Chat da Assembleia</strong>
-        <button id="minimizar-chat" style="padding: 2px 8px; background: rgba(255,255,255,0.2); color: white; border: none; border-radius: 4px; cursor: pointer;">
-            Minimizar
-        </button>
-    `;
-    chatContainer.appendChild(chatHeader);
-    
-    // Corpo do chat
-    const chatBody = document.createElement('div');
-    chatBody.id = 'chat-container-body';
-    chatBody.style.flex = '1';
-    chatBody.style.maxHeight = 'calc(80vh - 50px)';
-    chatBody.style.overflowY = 'auto';
-    chatBody.style.background = 'white';
-    chatBody.style.padding = '10px';
-    chatBody.style.borderRadius = '0 0 8px 8px';
-    chatBody.style.boxShadow = '0 2px 10px rgba(0,0,0,0.1)';
-    chatContainer.appendChild(chatBody);
-    
-    // Adiciona listeners
-    document.getElementById('minimizar-chat').addEventListener('click', () => toggleMinimizar('chat-container-body', 'minimizar-chat'));
-    makeDraggable(chatHeader, chatContainer);
 }
 
 // Função para alternar entre minimizar/maximizar
@@ -229,11 +225,46 @@ function toggleMinimizar(containerId, buttonId) {
     const button = document.getElementById(buttonId);
     
     if (container.style.display === 'none') {
-        container.style.display = containerId === 'chat-container' ? 'block' : 'flex';
+        container.style.display = 'block';
         button.textContent = 'Minimizar';
+        
+        // Reorganiza os containers após restaurar
+        reorganizarContainers();
     } else {
         container.style.display = 'none';
         button.textContent = 'Maximizar';
+    }
+}
+
+function reorganizarContainers() {
+    const chatContainer = document.getElementById('chat-container-standalone');
+    const mainContainer = document.getElementById('extensao-container');
+    
+    if (!chatContainer || !mainContainer) return;
+    
+    // Remove qualquer posicionamento absoluto/relativo que possa estar causando o problema
+    chatContainer.style.position = 'fixed';
+    chatContainer.style.bottom = '20px';
+    chatContainer.style.right = '20px';
+    
+    mainContainer.style.position = 'fixed';
+    mainContainer.style.bottom = '20px';
+    mainContainer.style.right = '20px';
+    
+    // Calcula a posição correta baseada no estado dos containers
+    const chatVisible = document.getElementById('chat-container-body').style.display !== 'none';
+    const reportsVisible = document.getElementById('reports-container').style.display !== 'none';
+    
+    if (chatVisible && reportsVisible) {
+        // Ambos visíveis - chat acima, relatórios abaixo
+        chatContainer.style.bottom = (mainContainer.offsetHeight + 30) + 'px';
+        mainContainer.style.bottom = '20px';
+    } else if (chatVisible) {
+        // Só chat visível
+        chatContainer.style.bottom = '20px';
+    } else if (reportsVisible) {
+        // Só relatórios visível
+        mainContainer.style.bottom = '20px';
     }
 }
 
@@ -594,12 +625,14 @@ async function verificarChats(pautas) {
 
 // Função para exibir novas mensagens
 function exibirNovasMensagens(mensagens, idPauta) {
-    const chatBody = document.getElementById('chat-container-body');
-    if (!chatBody) {
-        logError('Corpo do chat não encontrado!');
+    const chatContainer = document.getElementById('chat-container');
+    if (!chatContainer) {
+        logError('Container do chat não encontrado!');
         return;
     }
 
+    // Remove a verificação do chatBody pois agora usamos chatContainer diretamente
+    
     mensagens.forEach(msg => {
         const messageElement = document.createElement('div');
         messageElement.style.marginBottom = '10px';
@@ -621,10 +654,10 @@ function exibirNovasMensagens(mensagens, idPauta) {
             </div>
         `;
         
-        chatBody.appendChild(messageElement);
+        chatContainer.appendChild(messageElement);
     });
     
-    chatBody.scrollTop = chatBody.scrollHeight;
+    chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
 // Função auxiliar para formatar data/hora
