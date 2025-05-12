@@ -16,6 +16,7 @@ const estilosLog = {
 const cacheVotos = {};
 
 // Variáveis globais para controle do chat
+let chatMensagensCache = {};
 let cacheChats = {};
 let intervaloChat;
 const intervaloAtualizacaoChat = 10000; // 10 segundos
@@ -587,7 +588,25 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
                 onclick="this.parentNode.remove()">
             Fechar Relatório
         </button>
+
     `;
+
+    const btnAta = document.createElement('button');
+    btnAta.textContent = 'Gerar Ata';
+    btnAta.style.cssText = `
+    padding: 8px 15px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px;
+    `;
+
+    btnAta.addEventListener('click', () => gerarTextoAta(idPauta));
+
+    painel.appendChild(btnAta);
+
 
     reportsContainer.appendChild(painel);
     reportsContainer.scrollTop = reportsContainer.scrollHeight;
@@ -642,80 +661,147 @@ async function verificarChats(pautas) {
 function exibirNovasMensagens(mensagens, idPauta) {
     const chatContainer = document.getElementById('chat-container');
     if (!chatContainer) {
-        logError('Container do chat não encontrado!');
+        console.error('Container do chat não encontrado!');
         return;
     }
 
-    // Função auxiliar para parse e validação da data
-    const parseDateTime = (dateTimeStr) => {
-        try {
-            const [datePart, timePart] = dateTimeStr.split(' ');
-            const [day, month, year] = datePart.split('/');
-            const [hours, minutes, seconds] = timePart.split(':');
-            
-            return new Date(
-                parseInt(year),
-                parseInt(month) - 1,
-                parseInt(day),
-                parseInt(hours),
-                parseInt(minutes),
-                parseInt(seconds)
-            );
-        } catch (e) {
-            logError('Erro ao parsear data:', dateTimeStr, e);
-            return new Date(); // Retorna data atual como fallback
-        }
-    };
+    const novasMensagensParaExibir = [];
 
-    // 1. Converter e ordenar mensagens por timestamp
-    const mensagensOrdenadas = mensagens
-        .filter(msg => msg.dt_resposta_pau) // Filtra mensagens com data válida
-        .map(msg => {
-            return {
-                ...msg,
-                timestamp: parseDateTime(msg.dt_resposta_pau).getTime()
-            };
-        })
-        .sort((a, b) => a.timestamp - b.timestamp);
-
-    // 2. Limpar e adicionar mensagens ordenadas
-    chatContainer.innerHTML = '';
-
-    mensagensOrdenadas.forEach(msg => {
-        try {
-            const messageElement = document.createElement('div');
-            messageElement.style.marginBottom = '10px';
-            messageElement.style.padding = '8px 12px';
-            messageElement.style.borderRadius = '18px';
-            messageElement.style.background = '#ffffff';
-            messageElement.style.boxShadow = '0 1px 1px rgba(0,0,0,0.1)';
-            
-            // Formatação da data/hora no padrão brasileiro
-            const [data, hora] = msg.dt_resposta_pau.split(' ');
-            const [mes, dia] = data.split('/');
-            const [horas, minutos] = hora.split(':');
-            const dataHora = `${dia}/${mes} ${horas}:${minutos}`;
-            
-            // Remetente formatado (Bloco + Unidade)
-            const bloco = msg.st_bloco_uni1 || msg.st_bloco_uni || '';
-            const unidade = msg.st_unidade_uni1 || msg.st_unidade_uni || '';
-            const remetente = `${msg.st_nome_con || 'Anônimo'} (${bloco}${unidade})`;
-            
-            messageElement.innerHTML = `
-                <div style="font-size: 0.8em; color: #666; margin-bottom: 4px; display: flex; justify-content: space-between;">
-                    <span>${remetente}</span>
-                    <span>${dataHora}</span>
-                </div>
-                <div style="font-size: 0.95em; line-height: 1.4;">
-                    ${msg.st_resposta_pau || ''}
-                </div>
-            `;
-            
-            chatContainer.appendChild(messageElement);
-        } catch (e) {
-            logError('Erro ao exibir mensagem:', msg, e);
+    // 1. Identificar e armazenar novas mensagens
+    mensagens.forEach(msg => {
+        const mensagemId = msg.id_resposta_pau;
+        if (!chatMensagensCache[mensagemId]) {
+            chatMensagensCache[mensagemId] = msg;
+            novasMensagensParaExibir.push(msg);
         }
     });
-    
+
+    // 2. Ordenar as novas mensagens por timestamp
+    const novasMensagensOrdenadas = novasMensagensParaExibir.sort((a, b) => {
+        const timestampA = new Date(a.dt_resposta_pau.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1').replace(' ', 'T') + 'Z').getTime();
+        const timestampB = new Date(b.dt_resposta_pau.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1').replace(' ', 'T') + 'Z').getTime();
+        return timestampA - timestampB;
+    });
+
+    // 3. Inserir as novas mensagens no DOM na ordem correta
+    novasMensagensOrdenadas.forEach(novaMsg => {
+        const novaMensagemElement = criarElementoMensagem(novaMsg); // Reutilizamos a função de criação
+
+        let inserido = false;
+        for (let i = 0; i < chatContainer.children.length; i++) {
+            const elementoExistente = chatContainer.children[i];
+            const timestampExistente = parseInt(elementoExistente.dataset.timestamp);
+            const timestampNovaMsg = new Date(novaMsg.dt_resposta_pau.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1').replace(' ', 'T') + 'Z').getTime();
+
+            if (timestampNovaMsg < timestampExistente) {
+                chatContainer.insertBefore(novaMensagemElement, elementoExistente);
+                inserido = true;
+                break;
+            }
+        }
+
+        if (!inserido) {
+            chatContainer.appendChild(novaMensagemElement);
+        }
+    });
+
     chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+function criarElementoMensagem(msg) {
+    const messageElement = document.createElement('div');
+    messageElement.dataset.mensagemId = msg.id_resposta_pau; // Anotação do ID
+    messageElement.dataset.timestamp = new Date(msg.dt_resposta_pau.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1').replace(' ', 'T') + 'Z').getTime(); // Anotação do timestamp para ordenação
+
+    messageElement.style.marginBottom = '10px';
+    messageElement.style.padding = '8px 12px';
+    messageElement.style.borderRadius = '18px';
+    messageElement.style.background = '#ffffff';
+    messageElement.style.boxShadow = '0 1px 1px rgba(0,0,0,0.1)';
+
+    const [data, hora] = msg.dt_resposta_pau.split(' ');
+    const [dia, mes] = data.split('/');
+    const [horas, minutos] = hora.split(':');
+    const dataHora = `${dia}/${mes} ${horas}:${minutos}`;
+
+    const bloco = msg.st_bloco_uni1 || msg.st_bloco_uni || '';
+    const unidade = msg.st_unidade_uni1 || msg.st_unidade_uni || '';
+    const remetente = `${msg.st_nome_con || 'Anônimo'} (${bloco}${unidade})`;
+
+    messageElement.innerHTML = `
+        <div style="font-size: 0.8em; color: #666; margin-bottom: 4px; display: flex; justify-content: space-between;">
+            <span>${remetente}</span>
+            <span>${dataHora}</span>
+        </div>
+        <div style="font-size: 0.95em; line-height: 1.4;">
+            ${msg.st_resposta_pau || ''}
+        </div>
+    `;
+
+    return messageElement;
+}
+
+async function gerarTextoAta(idPauta) {
+    try {
+        const response = await fetch(`https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/resultadovotacao?idPauta=${idPauta}`);
+        const resultado = await response.json();
+
+        const opcoes = resultado.data.opcoes_voto;
+        const resultadoFinal = resultado.data.resultado_final;
+
+        const textoPrincipal = `Foi encerrada a votação tendo como resultado a opção "${resultadoFinal.resultado}" com ${resultadoFinal.detalhes[0].qtd_votos} votos (${resultadoFinal.detalhes[0].porcentagem}%) [${resultadoFinal.detalhes[0].lista_unidades}].`;
+
+        const outrasOpcoes = opcoes
+            .filter(op => op.st_nome_vot !== resultadoFinal.resultado)
+            .map(op => ` ${op.qtd_votos} votos (${op.porcentagem}%) [${op.lista_unidades}] da opção "${op.st_nome_vot}"`)
+            .join(' e');
+
+        const textoCompleto = textoPrincipal + (outrasOpcoes ? ' Contra' + outrasOpcoes + '.' : '');
+
+        // Criar o modal dinamicamente
+        const modal = document.createElement('div');
+        modal.id = 'modal-ata';
+        modal.style.position = 'fixed';
+        modal.style.top = '50%';
+        modal.style.left = '50%';
+        modal.style.transform = 'translate(-50%, -50%)';
+        modal.style.backgroundColor = '#f9f9f9';
+        modal.style.padding = '20px';
+        modal.style.border = '1px solid #ccc';
+        modal.style.borderRadius = '5px';
+        modal.style.zIndex = '10001';
+        modal.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+        modal.style.textAlign = 'center';
+
+        const titulo = document.createElement('h2');
+        titulo.textContent = 'Resultado da Votação';
+        titulo.style.marginBottom = '10px';
+
+        const textoAtaElement = document.createElement('p');
+        textoAtaElement.textContent = textoCompleto;
+        textoAtaElement.style.marginBottom = '15px';
+        textoAtaElement.style.lineHeight = '1.6';
+
+        const botaoFechar = document.createElement('button');
+        botaoFechar.textContent = 'Fechar';
+        botaoFechar.style.padding = '10px 15px';
+        botaoFechar.style.backgroundColor = '#007bff';
+        botaoFechar.style.color = 'white';
+        botaoFechar.style.border = 'none';
+        botaoFechar.style.borderRadius = '5px';
+        botaoFechar.style.cursor = 'pointer';
+        botaoFechar.addEventListener('click', () => {
+            document.body.removeChild(modal);
+        });
+
+        modal.appendChild(titulo);
+        modal.appendChild(textoAtaElement);
+        modal.appendChild(botaoFechar);
+
+        // Adicionar o modal ao body
+        document.body.appendChild(modal);
+    } catch (err) {
+        console.error('Erro ao buscar resultados:', err);
+        alert('Falha ao buscar resultado da votação.');
+    }
 }
