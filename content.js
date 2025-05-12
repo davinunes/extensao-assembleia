@@ -735,7 +735,7 @@ function criarElementoMensagem(msg) {
     messageElement.style.boxShadow = '0 1px 1px rgba(0,0,0,0.1)';
 
     const [data, hora] = msg.dt_resposta_pau.split(' ');
-    const [dia, mes] = data.split('/');
+    const [mes, dia] = data.split('/');
     const [horas, minutos] = hora.split(':');
     const dataHora = `${dia}/${mes} ${horas}:${minutos}`;
 
