@@ -604,8 +604,23 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     `;
 
     btnAta.addEventListener('click', () => gerarTextoAta(idPauta));
+    
+    const btnVotosPorBlocoAndar = document.createElement('button');
+    btnVotosPorBlocoAndar.textContent = 'Votos Por Andar';
+    btnVotosPorBlocoAndar.style.cssText = `
+    padding: 8px 15px;
+    background: #2c3e50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px;
+    `;
+
+    btnVotosPorBlocoAndar.addEventListener('click', () => gerarRelatorioTotalVotosTorreAndar(idPauta));
 
     painel.appendChild(btnAta);
+    painel.appendChild(btnVotosPorBlocoAndar);
 
 
     reportsContainer.appendChild(painel);
@@ -804,4 +819,120 @@ async function gerarTextoAta(idPauta) {
         console.error('Erro ao buscar resultados:', err);
         alert('Falha ao buscar resultado da votação.');
     }
+}
+
+async function gerarRelatorioTotalVotosTorreAndar(idPauta) {
+    try {
+        const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
+        const responseVotos = await fetch(urlVotos, { credentials: 'include' });
+        const votosData = await responseVotos.json();
+        const votos = votosData.data;
+
+        if (!votos || votos.length === 0) {
+            alert('Nenhum voto registrado para esta pauta.');
+            return;
+        }
+
+        const totalVotosPorTorreAndar = {};
+
+        votos.forEach(voto => {
+            const torre = voto.st_bloco_uni1 || voto.st_bloco_uni;
+            const unidade = voto.st_unidade_uni1 || voto.st_unidade_uni;
+            const andar = unidade ? unidade.substring(0, 2).padStart(2, '0') : 'N/A';
+
+            if (torre) {
+                if (!totalVotosPorTorreAndar[torre]) {
+                    totalVotosPorTorreAndar[torre] = {};
+                }
+                if (!totalVotosPorTorreAndar[torre][andar]) {
+                    totalVotosPorTorreAndar[torre][andar] = 0;
+                }
+                totalVotosPorTorreAndar[torre][andar]++;
+            }
+        });
+
+        // Criar o modal para exibir o relatório
+        const modalRelatorio = document.createElement('div');
+        modalRelatorio.id = 'modal-relatorio-total-votos';
+        modalRelatorio.style.position = 'fixed';
+        modalRelatorio.style.top = '50%';
+        modalRelatorio.style.left = '50%';
+        modalRelatorio.style.transform = 'translate(-50%, -50%)';
+        modalRelatorio.style.backgroundColor = '#f9f9f9';
+        modalRelatorio.style.padding = '20px';
+        modalRelatorio.style.border = '1px solid #ccc';
+        modalRelatorio.style.borderRadius = '5px';
+        modalRelatorio.style.zIndex = '1000';
+        modalRelatorio.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+        modalRelatorio.style.textAlign = 'left';
+        modalRelatorio.style.maxHeight = '80vh';
+        modalRelatorio.style.overflowY = 'auto';
+
+        const tituloRelatorio = document.createElement('h2');
+        tituloRelatorio.textContent = 'Total de Votos por Torre e Andar';
+        tituloRelatorio.style.marginBottom = '15px';
+        modalRelatorio.appendChild(tituloRelatorio);
+
+        const torresOrdenadas = Object.keys(totalVotosPorTorreAndar).sort();
+
+        torresOrdenadas.forEach(torre => {
+            const tituloTorre = document.createElement('h3');
+            tituloTorre.textContent = `Torre ${torre}`;
+            tituloTorre.style.marginTop = '10px';
+            tituloTorre.style.marginBottom = '5px';
+            modalRelatorio.appendChild(tituloTorre);
+
+            const andaresLista = document.createElement('ul');
+            andaresLista.style.listStyleType = 'none';
+            andaresLista.style.paddingLeft = '10px';
+
+            const andaresOrdenados = Object.keys(totalVotosPorTorreAndar[torre]).sort((a, b) => parseInt(a) - parseInt(b));
+
+            andaresOrdenados.forEach(andar => {
+                const andarItem = document.createElement('li');
+                andarItem.textContent = `Andar ${andar}: ${totalVotosPorTorreAndar[torre][andar]} votos`;
+                andaresLista.appendChild(andarItem);
+            });
+            modalRelatorio.appendChild(andaresLista);
+        });
+
+        const botaoFecharRelatorio = document.createElement('button');
+        botaoFecharRelatorio.textContent = 'Fechar';
+        botaoFecharRelatorio.style.padding = '10px 15px';
+        botaoFecharRelatorio.style.backgroundColor = '#28a745';
+        botaoFecharRelatorio.style.color = 'white';
+        botaoFecharRelatorio.style.border = 'none';
+        botaoFecharRelatorio.style.borderRadius = '5px';
+        botaoFecharRelatorio.style.cursor = 'pointer';
+        botaoFecharRelatorio.style.marginTop = '20px';
+        botaoFecharRelatorio.addEventListener('click', () => {
+            document.body.removeChild(modalRelatorio);
+            const overlay = document.getElementById('modal-overlay');
+            if (overlay) {
+                document.body.removeChild(overlay);
+            }
+        });
+        modalRelatorio.appendChild(botaoFecharRelatorio);
+
+        const overlay = document.getElementById('modal-overlay') || criarOverlay();
+        document.body.appendChild(modalRelatorio);
+
+    } catch (err) {
+        console.error('Erro ao buscar votos:', err);
+        alert('Falha ao buscar os votos para gerar o relatório.');
+    }
+}
+
+function criarOverlay() {
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-overlay';
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100%';
+    overlay.style.height = '100%';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.zIndex = '999';
+    document.body.appendChild(overlay);
+    return overlay;
 }
