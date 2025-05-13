@@ -120,7 +120,7 @@ function criarContainer() {
     container.style.bottom = '20px';
     container.style.right = '20px';
     container.style.zIndex = '10000';
-    container.style.maxHeight = '80vh';
+    container.style.maxHeight = '85vh';
     container.style.display = 'flex';
     container.style.flexDirection = 'column';
     container.style.background = 'transparent';
@@ -176,7 +176,7 @@ function criarContainer() {
     chatContainer.style.width = '600px';
     chatContainer.style.maxWidth = '100%';
     chatContainer.style.flexShrink = '1';
-    chatContainer.style.maxHeight = '70vh';
+    chatContainer.style.maxHeight = '80vh';
     chatContainer.style.overflowY = 'auto';
     chatContainer.style.padding = '10px';
     chatContainer.style.background = '#f9f9f9';
@@ -188,7 +188,7 @@ function criarContainer() {
     reportsContainer.id = 'reports-container';
     reportsContainer.style.width = '600px';
     reportsContainer.style.maxWidth = '100%';
-    reportsContainer.style.maxHeight = '70vh';
+    reportsContainer.style.maxHeight = '80vh';
     reportsContainer.style.flexShrink = '1';
     reportsContainer.style.overflowY = 'auto';
     reportsContainer.style.padding = '10px';
@@ -506,9 +506,23 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     // Cálculos
     const totalVotos = votosData.data?.length || 0;
     const quorumMinimo = 880;
-    const quorumAtingido = totalVotos >= quorumMinimo;
-    const votosFaltantes = Math.max(0, quorumMinimo - totalVotos);
-    const percentualAtingido = ((totalVotos / quorumMinimo) * 100).toFixed(1);
+
+    // Opção mais votada
+    const opcoes = resultadoData.data?.opcoes_voto || [];
+    const opcaoMaisVotada = opcoes.reduce((max, curr) => curr.qtd_votos > (max?.qtd_votos || 0) ? curr : max, null);
+
+    // Quórum Qualificado: opção mais votada atingiu o mínimo?
+    const votosMaisVotada = opcaoMaisVotada?.qtd_votos || 0;
+    const quorumQualificadoAtingido = votosMaisVotada >= quorumMinimo;
+    const percentualQualificado = ((votosMaisVotada / quorumMinimo) * 100).toFixed(1);
+    const votosFaltantesQualificado = Math.max(0, quorumMinimo - votosMaisVotada);
+
+    // Maioria Simples: a mais votada tem mais votos que as outras?
+    const maioriaSimplesAtingida = opcoes.every(opcao => {
+        if (opcao.st_nome_vot === opcaoMaisVotada?.st_nome_vot) return true;
+        return opcaoMaisVotada?.qtd_votos > opcao.qtd_votos;
+    });
+
 
     // Formata a contagem por torre
     const torresLista = Object.entries(votosPorTorre)
@@ -537,28 +551,23 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
             ${descPauta}
         </h4>
         
-        <div class="quorum" style="margin: 15px 0; padding: 12px; background: ${quorumAtingido ? '#e8f5e9' : '#ffebee'}; border-radius: 6px; border-left: 4px solid ${quorumAtingido ? '#4caf50' : '#f44336'};">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <strong>Quórum de Votação</strong>
-                <span style="font-weight: bold; color: ${quorumAtingido ? '#4caf50' : '#f44336'};">
-                    ${quorumAtingido ? '✅ Atingido' : '❌ Não Atingido'}
-                </span>
+        <div class="quorum" style="margin: 15px 0; padding: 12px; background: #f1f1f1; border-radius: 6px;">
+            
+            <!-- Quórum Qualificado -->
+            <div style="padding: 10px; margin-bottom: 10px; background: ${quorumQualificadoAtingido ? '#e8f5e9' : '#ffebee'}; border-left: 4px solid ${quorumQualificadoAtingido ? '#4caf50' : '#f44336'};">
+                <strong>Quórum Qualificado</strong><br>
+                <span>Opção mais votada: <strong>${opcaoMaisVotada?.st_nome_vot || 'N/A'}</strong></span><br>
+                <span>Votos: <strong>${votosMaisVotada}</strong> / ${quorumMinimo} (${percentualQualificado}%)</span><br>
+                ${!quorumQualificadoAtingido ? `<span style="color: #e65100;">⚠️ Faltam ${votosFaltantesQualificado} votos para atingir o quórum qualificado</span>` : `<span style="color: #4caf50;">✅ Quórum qualificado atingido</span>`}
             </div>
-            <div style="display: flex; justify-content: space-between; font-size: 0.9em;">
-                <div>
-                    <span>Total de votos: <strong>${totalVotos}</strong></span><br>
-                    <span>Mínimo necessário: <strong>${quorumMinimo}</strong></span>
-                </div>
-                <div style="text-align: right;">
-                    <span>${percentualAtingido}% do quórum</span><br>
-                    <span>Faltam: <strong>${votosFaltantes}</strong> votos</span>
-                </div>
+
+            <!-- Maioria Simples -->
+            <div style="padding: 10px; background: ${maioriaSimplesAtingida ? '#e8f5e9' : '#ffebee'}; border-left: 4px solid ${maioriaSimplesAtingida ? '#4caf50' : '#f44336'};">
+                <strong>Maioria Simples</strong><br>
+                ${maioriaSimplesAtingida 
+                    ? `<span style="color: #4caf50;">✅ Maioria simples atingida com <strong>${opcaoMaisVotada?.st_nome_vot}</strong></span>` 
+                    : `<span style="color: #f44336;">❌ Nenhuma opção obteve maioria simples</span>`}
             </div>
-            ${!quorumAtingido ? `
-            <div style="margin-top: 8px; background: #fff3e0; padding: 8px; border-radius: 4px; font-size: 0.85em;">
-                <span style="color: #e65100;">⚠️ A assembleia precisa de mais ${votosFaltantes} votos para atingir o quórum mínimo</span>
-            </div>
-            ` : ''}
         </div>
         
         <div style="margin: 15px 0;">
@@ -626,6 +635,7 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     reportsContainer.appendChild(painel);
     reportsContainer.scrollTop = reportsContainer.scrollHeight;
 }
+
 
 // Função para iniciar o monitoramento do chat
 function iniciarMonitoramentoChat(pautas) {
