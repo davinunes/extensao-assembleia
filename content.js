@@ -468,8 +468,17 @@ async function gerarRelatorio(idPauta, container, descPauta) {
         // C. Calcula votos por torre/bloco
         const votosPorTorre = calcularVotosPorTorre(votosData);
 
-        // D. Exibe os dados no container
-        exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta);
+        // D. Encontra a data do último voto
+        let dataUltimoVoto = null;
+        votosData.data?.forEach(voto => {
+            const dataVoto = new Date(voto.dt_data_vop.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1').replace(' ', 'T') + 'Z');
+            if (!dataUltimoVoto || dataVoto > dataUltimoVoto) {
+                dataUltimoVoto = dataVoto;
+            }
+        });
+
+        // E. Exibe os dados no container
+        exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta, dataUltimoVoto);
     } catch (error) {
         console.error(`Erro ao processar pauta ${idPauta}:`, error);
     }
@@ -488,7 +497,7 @@ function calcularVotosPorTorre(votosData) {
 }
 
 // Função para injetar o painel na página
-function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta) {
+function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta, dataUltimoVoto) {
     const reportsContainer = document.getElementById('reports-container');
     if (!reportsContainer) {
         logError('Container de relatórios não encontrado!');
@@ -628,8 +637,19 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
 
     btnVotosPorBlocoAndar.addEventListener('click', () => gerarRelatorioTotalVotosTorreAndar(idPauta));
 
+
+    // Adiciona a data do último voto ao card
+    const dataUltimoVotoFormatada = formatarDataHora(dataUltimoVoto);
+    const timestamp = document.createElement('div');
+    timestamp.style.textAlign = 'right';
+    timestamp.style.fontSize = '0.8em';
+    timestamp.style.color = '#7f8c8d';
+    timestamp.textContent = `Último voto: ${dataUltimoVotoFormatada}`;
+    
+
     painel.appendChild(btnAta);
     painel.appendChild(btnVotosPorBlocoAndar);
+    painel.appendChild(timestamp);
 
 
     reportsContainer.appendChild(painel);
@@ -945,4 +965,19 @@ function criarOverlay() {
     overlay.style.zIndex = '999';
     document.body.appendChild(overlay);
     return overlay;
+}
+
+function formatarDataHora(data) {
+  if (!data) {
+    return 'N/A';
+  }
+
+  const mes = String(data.getDate()).padStart(2, '0');
+  const dia = String(data.getMonth() + 1).padStart(2, '0'); // Meses começam em 0
+  const ano = data.getFullYear();
+  const horas = String(data.getHours()).padStart(2, '0');
+  const minutos = String(data.getMinutes()).padStart(2, '0');
+  const segundos = String(data.getSeconds()).padStart(2, '0');
+
+  return `${dia}/${mes}/${ano} ${horas}:${minutos}:${segundos}`;
 }
