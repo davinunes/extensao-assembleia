@@ -340,7 +340,7 @@ function toggleMonitoramento() {
 // Modifique a função verificarPautas()
 async function verificarPautas(container, forcarAtualizacao = false) {
     logInfo('Verificando pautas e votos...');
-    
+
     try {
         const assembleiaInfo = obterIdAssembleia();
         if (!assembleiaInfo) return;
@@ -350,16 +350,27 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         const tipo = passada ? 'passadas' : 'proximas';
         const urlPautas = `https://solucoesdf.superlogica.net/areadocondomino/atual/assembleiasv2/index?assembleias=${tipo}&id=${idAssembleia}&comPautas=1`;
 
-        const response = await fetch(urlPautas, { credentials: 'include' });
-        const data = await response.json();
+        const responsePautas = await fetch(urlPautas, { credentials: 'include' });
+        const dataPautas = await responsePautas.json();
 
-        if (!data.data?.[0]?.pautas) {
+        if (dataPautas?.status === "401") {
+            logWarning('Sessão expirou!');
+            const reportsCol = document.getElementById('reports-container');
+            if (reportsCol) {
+                reportsCol.innerHTML = `<div style="color: red; font-weight: bold; padding: 10px; border: 1px solid red; border-radius: 5px; background-color: #ffebee;">Sessão expirou. Por favor, atualize a página ou entre em contato com a administração.</div>`;
+            }
+            // Interrompe o monitoramento, pois a sessão expirou
+            toggleMonitoramento();
+            return;
+        }
+
+        if (!dataPautas.data?.[0]?.pautas) {
             logWarning('Nenhuma pauta encontrada.');
             return;
         }
 
-        const pautasAtuais = data.data[0].pautas;
-        tipoAssembleia = data.data[0].tipo_assembleia;
+        const pautasAtuais = dataPautas.data[0].pautas;
+        tipoAssembleia = dataPautas.data[0].tipo_assembleia;
 
         let precisaAtualizar = forcarAtualizacao || JSON.stringify(pautasAtuais) !== JSON.stringify(ultimasPautasConhecidas);
 
@@ -369,10 +380,22 @@ async function verificarPautas(container, forcarAtualizacao = false) {
                 const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
                 const responseVotos = await fetch(urlVotos, { credentials: 'include' });
                 const votosData = await responseVotos.json();
-                
+
+                // Verifica se a resposta de votos indica sessão expirada
+                if (votosData?.status === "401") {
+                    logWarning('Sessão expirou!');
+                    const reportsCol = document.getElementById('reports-container');
+                    if (reportsCol) {
+                        reportsCol.innerHTML = `<div style="color: red; font-weight: bold; padding: 10px; border: 1px solid red; border-radius: 5px; background-color: #ffebee;">Sessão expirou. Por favor, atualize a página ou entre em contato com a administração.</div>`;
+                    }
+                    // Interrompe o monitoramento
+                    toggleMonitoramento();
+                    return;
+                }
+
                 const totalVotosAtual = votosData.data?.length || 0;
                 const totalVotosAnterior = obterTotalVotosAnterior(idPauta);
-                
+
                 if (totalVotosAtual !== totalVotosAnterior) {
                     logDebug(`Votos da pauta ${idPauta} mudaram: ${totalVotosAnterior} → ${totalVotosAtual}`);
                     precisaAtualizar = true;
@@ -384,22 +407,25 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         if (precisaAtualizar) {
             logSuccess('Atualizando relatórios...');
             ultimasPautasConhecidas = pautasAtuais;
-            
+
             const reportsCol = document.getElementById('reports-container');
             if (reportsCol) reportsCol.innerHTML = '';
-            
+
             iniciarMonitoramentoChat(pautasAtuais);
 
             for (const pauta of pautasAtuais) {
                 const idPauta = pauta.id_pauta_pau;
                 const descPauta = pauta.st_titulo_pau;
-                
+
                 const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
                 const responseVotos = await fetch(urlVotos, { credentials: 'include' });
                 const votosData = await responseVotos.json();
-                
+
+                // Não precisamos verificar o status 401 aqui novamente,
+                // pois já fizemos isso no início da iteração das pautas.
+
                 armazenarTotalVotos(idPauta, votosData.data?.length || 0);
-                
+
                 await gerarRelatorio(idPauta, container, descPauta);
             }
 
@@ -416,7 +442,6 @@ async function verificarPautas(container, forcarAtualizacao = false) {
         logError('Erro ao verificar pautas:', error);
     }
 }
-
 
 function armazenarTotalVotos(idPauta, total) {
     cacheVotos[idPauta] = total;
@@ -471,11 +496,12 @@ async function gerarRelatorio(idPauta, container, descPauta) {
         // D. Encontra a data do último voto
         let dataUltimoVoto = null;
         votosData.data?.forEach(voto => {
-            const dataVoto = new Date(voto.dt_data_vop.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1').replace(' ', 'T') + 'Z');
+            const dataVoto = parseDataAmericana(voto.dt_data_vop);
             if (!dataUltimoVoto || dataVoto > dataUltimoVoto) {
                 dataUltimoVoto = dataVoto;
             }
         });
+
 
         // E. Exibe os dados no container
         exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta, dataUltimoVoto);
@@ -972,12 +998,19 @@ function formatarDataHora(data) {
     return 'N/A';
   }
 
-  const mes = String(data.getDate()).padStart(2, '0');
-  const dia = String(data.getMonth() + 1).padStart(2, '0'); // Meses começam em 0
+  const dia = String(data.getDate()).padStart(2, '0');
+  const mes = String(data.getMonth() + 1).padStart(2, '0'); // Meses começam em 0
   const ano = data.getFullYear();
   const horas = String(data.getHours()).padStart(2, '0');
   const minutos = String(data.getMinutes()).padStart(2, '0');
   const segundos = String(data.getSeconds()).padStart(2, '0');
 
   return `${dia}/${mes}/${ano} ${horas}:${minutos}:${segundos}`;
+}
+
+function parseDataAmericana(dataStr) {
+    // Ex: "05/18/2025 09:54:48"
+    const [data, hora] = dataStr.split(' ');
+    const [mes, dia, ano] = data.split('/');
+    return new Date(`${ano}-${mes}-${dia}T${hora}Z`);
 }
