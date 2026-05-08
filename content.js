@@ -69,10 +69,14 @@ const chatStyles = {
 
 
 // 1. Verifica se a página já está carregada
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    iniciarExtensao();
+if (window.location.href.includes('/publico/cobranca')) {
+    console.log('Monitor de Assembleia desativado na página de cobrança.');
 } else {
-    document.addEventListener('DOMContentLoaded', iniciarExtensao);
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        iniciarExtensao();
+    } else {
+        document.addEventListener('DOMContentLoaded', iniciarExtensao);
+    }
 }
 
 
@@ -493,6 +497,57 @@ async function gerarRelatorio(idPauta, container, descPauta) {
         // C. Calcula votos por torre/bloco
         const votosPorTorre = calcularVotosPorTorre(votosData);
 
+        // --- INÍCIO: APLICAR VOTOS MANUAIS ---
+        const votosManuais = JSON.parse(localStorage.getItem(`votos_verbais_${idPauta}`)) || [];
+        votosManuais.forEach(voto => {
+            const torre = voto.bloco || 'Sem torre';
+            votosPorTorre[torre] = (votosPorTorre[torre] || 0) + 1;
+            
+            if (resultadoData.data && resultadoData.data.opcoes_voto) {
+                let op = resultadoData.data.opcoes_voto.find(o => o.st_nome_vot === voto.opcao);
+                if (op) {
+                    op.qtd_votos = parseInt(op.qtd_votos) + 1;
+                    let novaUnidade = `${voto.bloco}-${voto.unidade}`;
+                    if (op.lista_unidades) {
+                        op.lista_unidades += `, ${novaUnidade}`;
+                    } else {
+                        op.lista_unidades = novaUnidade;
+                    }
+                } else {
+                    resultadoData.data.opcoes_voto.push({
+                        st_nome_vot: voto.opcao,
+                        qtd_votos: 1,
+                        lista_unidades: `${voto.bloco}-${voto.unidade}`,
+                        porcentagem: 0
+                    });
+                }
+            }
+
+            if (votosData.data) {
+                votosData.data.push({
+                    st_bloco_uni1: voto.bloco,
+                    st_unidade_uni1: voto.unidade,
+                    st_nome_con: voto.nome,
+                    dt_data_vop: new Date().toLocaleString()
+                });
+            }
+        });
+
+        if (resultadoData.data && resultadoData.data.opcoes_voto) {
+            let totalVotosResult = resultadoData.data.opcoes_voto.reduce((acc, op) => acc + parseInt(op.qtd_votos), 0);
+            resultadoData.data.opcoes_voto.forEach(op => {
+                op.porcentagem = totalVotosResult > 0 ? ((parseInt(op.qtd_votos) / totalVotosResult) * 100).toFixed(2) : 0;
+            });
+            resultadoData.data.opcoes_voto.sort((a, b) => b.qtd_votos - a.qtd_votos);
+            if (resultadoData.data.opcoes_voto.length > 0) {
+                resultadoData.data.resultado_final = {
+                    resultado: resultadoData.data.opcoes_voto[0].st_nome_vot,
+                    detalhes: [resultadoData.data.opcoes_voto[0]]
+                };
+            }
+        }
+        // --- FIM: APLICAR VOTOS MANUAIS ---
+
         // D. Encontra a data do último voto
         let dataUltimoVoto = null;
         votosData.data?.forEach(voto => {
@@ -647,8 +702,21 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     margin-left: 10px;
     `;
 
-    btnAta.addEventListener('click', () => gerarTextoAta(idPauta));
+    btnAta.addEventListener('click', () => gerarTextoAta(idPauta, resultadoData));
     
+    const btnVotoManual = document.createElement('button');
+    btnVotoManual.textContent = '+ Lançar Voto Verbal';
+    btnVotoManual.style.cssText = `
+    padding: 8px 15px;
+    background: #8e44ad;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 10px;
+    `;
+    btnVotoManual.addEventListener('click', () => abrirModalVotoVerbal(idPauta, resultadoData));
+
     const btnVotosPorBlocoAndar = document.createElement('button');
     btnVotosPorBlocoAndar.textContent = 'Votos Por Andar';
     btnVotosPorBlocoAndar.style.cssText = `
@@ -661,7 +729,7 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     margin-left: 10px;
     `;
 
-    btnVotosPorBlocoAndar.addEventListener('click', () => gerarRelatorioTotalVotosTorreAndar(idPauta));
+    btnVotosPorBlocoAndar.addEventListener('click', () => gerarRelatorioTotalVotosTorreAndar(idPauta, votosData));
 
 
     // Adiciona a data do último voto ao card
@@ -675,6 +743,7 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
 
     painel.appendChild(btnAta);
     painel.appendChild(btnVotosPorBlocoAndar);
+    painel.appendChild(btnVotoManual);
     painel.appendChild(timestamp);
 
 
@@ -812,10 +881,13 @@ function criarElementoMensagem(msg) {
     return messageElement;
 }
 
-async function gerarTextoAta(idPauta) {
+async function gerarTextoAta(idPauta, resultadoPassado = null) {
     try {
-        const response = await fetch(`https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/resultadovotacao?idPauta=${idPauta}`);
-        const resultado = await response.json();
+        let resultado = resultadoPassado;
+        if (!resultado) {
+            const response = await fetch(`https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/resultadovotacao?idPauta=${idPauta}`);
+            resultado = await response.json();
+        }
 
         const opcoes = resultado.data.opcoes_voto;
         const resultadoFinal = resultado.data.resultado_final;
@@ -877,11 +949,26 @@ async function gerarTextoAta(idPauta) {
     }
 }
 
-async function gerarRelatorioTotalVotosTorreAndar(idPauta) {
+async function gerarRelatorioTotalVotosTorreAndar(idPauta, votosPassados = null) {
     try {
-        const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
-        const responseVotos = await fetch(urlVotos, { credentials: 'include' });
-        const votosData = await responseVotos.json();
+        let votosData = votosPassados;
+        if (!votosData) {
+            const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
+            const responseVotos = await fetch(urlVotos, { credentials: 'include' });
+            votosData = await responseVotos.json();
+            
+            // Aplica os votos manuais do localStorage para consistência
+            const votosManuais = JSON.parse(localStorage.getItem(`votos_verbais_${idPauta}`)) || [];
+            votosManuais.forEach(voto => {
+                if (votosData.data) {
+                    votosData.data.push({
+                        st_bloco_uni1: voto.bloco,
+                        st_unidade_uni1: voto.unidade,
+                        st_nome_con: voto.nome
+                    });
+                }
+            });
+        }
         const votos = votosData.data;
 
         if (!votos || votos.length === 0) {
@@ -1014,3 +1101,105 @@ function parseDataAmericana(dataStr) {
     const [mes, dia, ano] = data.split('/');
     return new Date(`${ano}-${mes}-${dia}T${hora}Z`);
 }
+
+function abrirModalVotoVerbal(idPauta, resultadoData) {
+    const modal = document.createElement('div');
+    modal.id = 'modal-voto-verbal';
+    modal.style.position = 'fixed';
+    modal.style.top = '50%';
+    modal.style.left = '50%';
+    modal.style.transform = 'translate(-50%, -50%)';
+    modal.style.backgroundColor = '#f9f9f9';
+    modal.style.padding = '20px';
+    modal.style.border = '1px solid #ccc';
+    modal.style.borderRadius = '5px';
+    modal.style.zIndex = '10002';
+    modal.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+    modal.style.width = '350px';
+
+    const opcoesHtml = resultadoData.data.opcoes_voto.map(op => `<option value="${op.st_nome_vot}">${op.st_nome_vot}</option>`).join('');
+
+    modal.innerHTML = `
+        <h3 style="margin-top:0;">Lançar Voto Verbal</h3>
+        <div style="margin-bottom: 10px;">
+            <label style="display:block;">Bloco (Ex: A):</label>
+            <input type="text" id="voto-bloco" style="width: 100%; padding: 5px; text-transform: uppercase;">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label style="display:block;">Unidade:</label>
+            <input type="text" id="voto-unidade" style="width: 100%; padding: 5px;">
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label style="display:block;">Nome:</label>
+            <input type="text" id="voto-nome" style="width: 100%; padding: 5px;">
+        </div>
+        <div style="margin-bottom: 15px;">
+            <label style="display:block;">Opção de Voto:</label>
+            <select id="voto-opcao" style="width: 100%; padding: 5px;">
+                ${opcoesHtml}
+            </select>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <button id="btn-cancelar-voto" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Cancelar</button>
+            <button id="btn-salvar-voto" style="padding: 8px 15px; background: #2ecc71; color: white; border: none; border-radius: 4px; cursor: pointer;">Salvar Voto</button>
+        </div>
+        <div style="margin-top: 15px;">
+            <strong style="display:block; margin-bottom:5px;">Votos Lançados Manualmente:</strong>
+            <ul id="lista-votos-verbais" style="font-size: 0.9em; padding-left: 15px; max-height: 100px; overflow-y: auto;"></ul>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    function renderizarListaVotos() {
+        const votos = JSON.parse(localStorage.getItem(`votos_verbais_${idPauta}`)) || [];
+        const ul = modal.querySelector('#lista-votos-verbais');
+        ul.innerHTML = votos.map((v, index) => `
+            <li style="margin-bottom: 5px;">
+                ${v.bloco}-${v.unidade} (${v.nome}) - <strong>${v.opcao}</strong> 
+                <button data-index="${index}" class="btn-remover-voto" style="color: red; border: none; background: none; cursor: pointer; font-size: 1.1em; padding: 0 5px;" title="Remover voto">&times;</button>
+            </li>
+        `).join('');
+        
+        modal.querySelectorAll('.btn-remover-voto').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = e.target.getAttribute('data-index');
+                votos.splice(idx, 1);
+                localStorage.setItem(`votos_verbais_${idPauta}`, JSON.stringify(votos));
+                renderizarListaVotos();
+            });
+        });
+    }
+    
+    renderizarListaVotos();
+
+    modal.querySelector('#btn-cancelar-voto').addEventListener('click', () => {
+        document.body.removeChild(modal);
+    });
+
+    modal.querySelector('#btn-salvar-voto').addEventListener('click', () => {
+        const bloco = modal.querySelector('#voto-bloco').value.trim().toUpperCase();
+        const unidade = modal.querySelector('#voto-unidade').value.trim();
+        const nome = modal.querySelector('#voto-nome').value.trim();
+        const opcao = modal.querySelector('#voto-opcao').value;
+
+        if (!bloco || !unidade || !nome) {
+            alert('Preencha todos os campos!');
+            return;
+        }
+
+        const voto = { bloco, unidade, nome, opcao };
+        const votos = JSON.parse(localStorage.getItem(`votos_verbais_${idPauta}`)) || [];
+        votos.push(voto);
+        localStorage.setItem(`votos_verbais_${idPauta}`, JSON.stringify(votos));
+
+        modal.querySelector('#voto-bloco').value = '';
+        modal.querySelector('#voto-unidade').value = '';
+        modal.querySelector('#voto-nome').value = '';
+        
+        renderizarListaVotos();
+        
+        alert('Voto salvo com sucesso! Clique em "Atualizar" no painel principal para recalcular a ata e os gráficos.');
+    });
+}
+
