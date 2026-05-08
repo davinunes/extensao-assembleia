@@ -507,7 +507,7 @@ async function gerarRelatorio(idPauta, container, descPauta) {
                 let op = resultadoData.data.opcoes_voto.find(o => o.st_nome_vot === voto.opcao);
                 if (op) {
                     op.qtd_votos = parseInt(op.qtd_votos) + 1;
-                    let novaUnidade = `${voto.bloco}-${voto.unidade}`;
+                    let novaUnidade = `${voto.unidade} ${voto.bloco}`;
                     if (op.lista_unidades) {
                         op.lista_unidades += `, ${novaUnidade}`;
                     } else {
@@ -517,7 +517,7 @@ async function gerarRelatorio(idPauta, container, descPauta) {
                     resultadoData.data.opcoes_voto.push({
                         st_nome_vot: voto.opcao,
                         qtd_votos: 1,
-                        lista_unidades: `${voto.bloco}-${voto.unidade}`,
+                        lista_unidades: `${voto.unidade} ${voto.bloco}`,
                         porcentagem: 0
                     });
                 }
@@ -536,6 +536,11 @@ async function gerarRelatorio(idPauta, container, descPauta) {
         if (resultadoData.data && resultadoData.data.opcoes_voto) {
             let totalVotosResult = resultadoData.data.opcoes_voto.reduce((acc, op) => acc + parseInt(op.qtd_votos), 0);
             resultadoData.data.opcoes_voto.forEach(op => {
+                if (op.lista_unidades) {
+                    let arr = op.lista_unidades.split(',').map(s => s.trim()).filter(s => s);
+                    arr.sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+                    op.lista_unidades = arr.join(', ');
+                }
                 op.porcentagem = totalVotosResult > 0 ? ((parseInt(op.qtd_votos) / totalVotosResult) * 100).toFixed(2) : 0;
             });
             resultadoData.data.opcoes_voto.sort((a, b) => b.qtd_votos - a.qtd_votos);
@@ -892,6 +897,20 @@ async function gerarTextoAta(idPauta, resultadoPassado = null) {
         const opcoes = resultado.data.opcoes_voto;
         const resultadoFinal = resultado.data.resultado_final;
 
+        const votosManuais = JSON.parse(localStorage.getItem(`votos_verbais_${idPauta}`)) || [];
+        let textoVotosVerbais = '';
+        if (votosManuais.length > 0) {
+            const listaManifestacoes = votosManuais.map(v => `${v.bloco}${v.unidade} ${v.nome} - ${v.opcao}`);
+            let textoManifestacoes = '';
+            if (listaManifestacoes.length === 1) {
+                textoManifestacoes = listaManifestacoes[0];
+            } else {
+                const ult = listaManifestacoes.pop();
+                textoManifestacoes = listaManifestacoes.join(', ') + ', e ' + ult;
+            }
+            textoVotosVerbais = `Houve manifestações de voto declarado, sendo elas: ${textoManifestacoes}. `;
+        }
+
         const textoPrincipal = `Foi encerrada a votação tendo como resultado a opção "${resultadoFinal.resultado}" com ${resultadoFinal.detalhes[0].qtd_votos} votos (${resultadoFinal.detalhes[0].porcentagem}%) [${resultadoFinal.detalhes[0].lista_unidades}].`;
 
         const outrasOpcoes = opcoes
@@ -899,7 +918,7 @@ async function gerarTextoAta(idPauta, resultadoPassado = null) {
             .map(op => ` ${op.qtd_votos} votos (${op.porcentagem}%) [${op.lista_unidades}] da opção "${op.st_nome_vot}"`)
             .join(' e');
 
-        const textoCompleto = textoPrincipal + (outrasOpcoes ? ' Contra' + outrasOpcoes + '.' : '');
+        const textoCompleto = textoVotosVerbais + textoPrincipal + (outrasOpcoes ? ' Contra' + outrasOpcoes + '.' : '');
 
         // Criar o modal dinamicamente
         const modal = document.createElement('div');
