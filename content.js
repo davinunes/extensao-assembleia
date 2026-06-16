@@ -604,10 +604,14 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
 
     // Opção mais votada
     const opcoes = resultadoData.data?.opcoes_voto || [];
-    const opcaoMaisVotada = opcoes.reduce((max, curr) => curr.qtd_votos > (max?.qtd_votos || 0) ? curr : max, null);
+    const opcaoMaisVotada = opcoes.reduce((max, curr) => {
+        const currVotos = parseInt(curr.qtd_votos, 10) || 0;
+        const maxVotos = max ? (parseInt(max.qtd_votos, 10) || 0) : 0;
+        return currVotos > maxVotos ? curr : max;
+    }, null);
 
     // Quórum Qualificado: opção mais votada atingiu o mínimo?
-    const votosMaisVotada = opcaoMaisVotada?.qtd_votos || 0;
+    const votosMaisVotada = opcaoMaisVotada ? (parseInt(opcaoMaisVotada.qtd_votos, 10) || 0) : 0;
     const quorumQualificadoAtingido = votosMaisVotada >= quorumMinimo;
     const percentualQualificado = ((votosMaisVotada / quorumMinimo) * 100).toFixed(1);
     const votosFaltantesQualificado = Math.max(0, quorumMinimo - votosMaisVotada);
@@ -615,7 +619,9 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     // Maioria Simples: a mais votada tem mais votos que as outras?
     const maioriaSimplesAtingida = opcoes.every(opcao => {
         if (opcao.st_nome_vot === opcaoMaisVotada?.st_nome_vot) return true;
-        return opcaoMaisVotada?.qtd_votos > opcao.qtd_votos;
+        const currVotos = parseInt(opcao.qtd_votos, 10) || 0;
+        const maxVotos = opcaoMaisVotada ? (parseInt(opcaoMaisVotada.qtd_votos, 10) || 0) : 0;
+        return maxVotos > currVotos;
     });
 
 
