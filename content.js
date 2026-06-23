@@ -430,7 +430,7 @@ async function verificarPautas(container, forcarAtualizacao = false) {
 
                 armazenarTotalVotos(idPauta, votosData.data?.length || 0);
 
-                await gerarRelatorio(idPauta, container, descPauta);
+                await gerarRelatorio(pauta, container);
             }
 
             const timestamp = document.createElement('div');
@@ -484,8 +484,10 @@ function obterIdAssembleia() {
 
 
 // Função para gerar relatório de uma pauta
-async function gerarRelatorio(idPauta, container, descPauta) {
+async function gerarRelatorio(pauta, container) {
     try {
+        const idPauta = pauta.id_pauta_pau;
+        const descPauta = pauta.st_titulo_pau;
         // A. Busca votos individuais
         const urlVotos = `https://solucoesdf.superlogica.net/areadocondomino/atual/pautasv2/votos?idPauta=${idPauta}&comOpcaoDeVoto=true&comQuantidadeFavoritos=true&idContato=0`;
         const votosData = await (await fetch(urlVotos, { credentials: 'include' })).json();
@@ -564,7 +566,7 @@ async function gerarRelatorio(idPauta, container, descPauta) {
 
 
         // E. Exibe os dados no container
-        exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta, dataUltimoVoto);
+        exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta, dataUltimoVoto, pauta);
     } catch (error) {
         console.error(`Erro ao processar pauta ${idPauta}:`, error);
     }
@@ -583,7 +585,7 @@ function calcularVotosPorTorre(votosData) {
 }
 
 // Função para injetar o painel na página
-function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta, dataUltimoVoto) {
+function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, container, descPauta, dataUltimoVoto, pauta) {
     const reportsContainer = document.getElementById('reports-container');
     if (!reportsContainer) {
         logError('Container de relatórios não encontrado!');
@@ -636,8 +638,15 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
         )
         .join('');
 
+    const statusBadge = pauta && pauta.votacao_disponivel === "0" 
+        ? `<span style="font-size: 0.7em; background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 3px 8px; border-radius: 12px; font-weight: bold; box-shadow: 0 1px 3px rgba(192, 57, 43, 0.2);">ENCERRADA</span>`
+        : `<span style="font-size: 0.7em; background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; padding: 3px 8px; border-radius: 12px; font-weight: bold; box-shadow: 0 1px 3px rgba(46, 204, 113, 0.2);">ATIVA</span>`;
+
     painel.innerHTML = `
-        <h3 style="margin-top: 0; color: #2c3e50;">Relatório da Pauta #${idPauta}</h3>
+        <h3 style="margin-top: 0; color: #2c3e50; display: flex; align-items: center; justify-content: space-between;">
+            <span>Relatório da Pauta #${idPauta}</span>
+            ${statusBadge}
+        </h3>
         <h4 style="margin: 10px 0;
                   font-size: 1em;
                   color: #555;
@@ -726,7 +735,7 @@ function exibirPainel(votosData, resultadoData, votosPorTorre, idPauta, containe
     cursor: pointer;
     margin-left: 10px;
     `;
-    btnVotoManual.addEventListener('click', () => abrirModalVotoVerbal(idPauta, resultadoData));
+    btnVotoManual.addEventListener('click', () => abrirModalVotoVerbal(idPauta, resultadoData, pauta));
 
     const btnVotosPorBlocoAndar = document.createElement('button');
     btnVotosPorBlocoAndar.textContent = 'Votos Por Andar';
@@ -1127,7 +1136,7 @@ function parseDataAmericana(dataStr) {
     return new Date(`${ano}-${mes}-${dia}T${hora}Z`);
 }
 
-function abrirModalVotoVerbal(idPauta, resultadoData) {
+function abrirModalVotoVerbal(idPauta, resultadoData, pauta) {
     const modal = document.createElement('div');
     modal.id = 'modal-voto-verbal';
     modal.style.position = 'fixed';
@@ -1144,8 +1153,36 @@ function abrirModalVotoVerbal(idPauta, resultadoData) {
 
     const opcoesHtml = resultadoData.data.opcoes_voto.map(op => `<option value="${op.st_nome_vot}">${op.st_nome_vot}</option>`).join('');
 
+    const estaEncerrada = pauta && pauta.votacao_disponivel === "0";
+    let alertBanner = '';
+    if (estaEncerrada) {
+        alertBanner = `
+            <div style="
+                background: linear-gradient(135deg, #e74c3c, #c0392b);
+                color: white;
+                padding: 10px 12px;
+                border-radius: 6px;
+                margin-bottom: 15px;
+                font-weight: 500;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                box-shadow: 0 2px 4px rgba(192, 57, 43, 0.2);
+                font-size: 0.9em;
+                line-height: 1.4;
+            ">
+                <span style="font-size: 1.2em; flex-shrink: 0;">🔒</span>
+                <div style="text-align: left;">
+                    <strong style="display: block; font-weight: bold; margin-bottom: 2px;">Votação Encerrada</strong>
+                    <span style="font-size: 0.85em; opacity: 0.9; display: block;">Esta pauta já encerrou e não aceita mais votos online.</span>
+                </div>
+            </div>
+        `;
+    }
+
     modal.innerHTML = `
         <h3 style="margin-top:0;">Lançar Voto Verbal</h3>
+        ${alertBanner}
         <div style="margin-bottom: 10px;">
             <label style="display:block;">Bloco (Ex: A):</label>
             <input type="text" id="voto-bloco" style="width: 100%; padding: 5px; text-transform: uppercase;">
